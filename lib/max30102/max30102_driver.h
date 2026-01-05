@@ -4,6 +4,10 @@
 #include <Arduino.h>
 #include <Wire.h>
 
+#define STORAGE_SIZE                    256
+
+#define I2C_BUFFER_LENGTH               128 // esp32 c3 i2c buffer length
+
 #define MAX30102_PART_ID_ADDRESS        0xFF
 #define MAX30102_RESET                  0x40
 
@@ -24,11 +28,11 @@
 #define MAX30102_LED1_PA                0x0C
 #define MAX30102_LED2_PA                0x0D
 
-struct SensorData {
+struct MaxSample {
     uint32_t Red;
     uint32_t Ir;
-        
 };
+
 
 class MAX30102 {
     public:
@@ -38,14 +42,29 @@ class MAX30102 {
         void setup();
         void clearFIFO();
         void readNewData();
+        void shutDown();
+        void wakeUp();
+        void FifoConfiguration();
 
-        SensorData DiodeData;
+        uint16_t available();
+        MaxSample readSample();
+
     
     private:
         uint8_t _i2caddr;
 
         void writeRegister(uint8_t reg, uint8_t value);
         uint8_t readRegister(uint8_t reg);
+
+        struct SensorData {
+            uint32_t storageRed[STORAGE_SIZE];
+            uint32_t storageIr[STORAGE_SIZE];
+            uint16_t head = 0;
+            uint16_t tail = 0;
+        };
+
+        SensorData DiodeData;
+
 };
 
 

@@ -43,6 +43,8 @@ bool MAX30102::begin() {
         delay(1);
     }
 
+    setup();
+
     return true;
 }
 
@@ -58,6 +60,7 @@ void MAX30102::setup() {
     writeRegister(MAX30102_LED2_PA, 0x1F); // LED IR Current 0x1F - 6.2 mA
 
     clearFIFO();
+    FifoConfiguration();
 
 }
 
@@ -65,6 +68,20 @@ void MAX30102::clearFIFO() {
     writeRegister(MAX30102_FIFO_WRITE_POINTER, 0);
     writeRegister(MAX30102_FIFO_OVERFLOW_COUNTER, 0);
     writeRegister(MAX30102_FIFO_READ_POINTER, 0);
+    DiodeData.head = 0;
+    DiodeData.tail = 0;
+}
+
+void MAX30102::FifoConfiguration() {
+    writeRegister(MAX30102_FIFO_CONFIGURATION, 0x10); // 0x10 FIFO rollvower ON
+}
+
+void MAX30102::shutDown() {
+    writeRegister(MAX30102_MODE_CONFIGURATION, 0x80);
+}
+
+void MAX30102::wakeUp() {
+    writeRegister(MAX30102_MODE_CONFIGURATION, 0x00);
 }
 
 void MAX30102::readNewData() {
@@ -82,26 +99,72 @@ void MAX30102::readNewData() {
 
     int data_to_read = number_of_samples * 2 * 3; // number_of_samples * number_of_diodes (Red, Ir) * number of bytes (3 for each diode)
 
-    if (number_of_samples > 0) {
+    while (data_to_read > 0) {
+        int to_get = data_to_read;
+
+        if (to_get > I2C_BUFFER_LENGTH) {
+            to_get = I2C_BUFFER_LENGTH - (I2C_BUFFER_LENGTH % (2 * 3)); 
+            // if request exceeds buffer, trim to fit whole samples 
+            // 2 * 3 - number_of_diodes (Red, Ir) * number of bytes (3 for each diode)
+        }
+
+        data_to_read -= to_get;
+
         Wire.beginTransmission(_i2caddr);
         Wire.write(MAX30102_FIFO_DATA_REGISTER);
         Wire.endTransmission(false);
 
-        Wire.requestFrom(_i2caddr, (uint8_t) 6);
-        uint8_t buffer[6];
-        int i = 0;
+        Wire.requestFrom(_i2caddr, (uint8_t) to_get);
+        while (to_get > 0) {
 
-        while (Wire.available() && i < 6) {
-            buffer[i++] = Wire.read();
+            uint8_t buffer[6];
+            int i = 0;
+
+            for (int i=0; i<6; i++) 
+                buffer[i] = Wire.read();
+            
+            to_get -= 6;
+
+            uint32_t temp_red_data = (uint32_t)buffer[0] << 16 | (uint32_t)buffer[1] << 8 | (uint32_t)buffer[2];
+            uint32_t temp_ir_data = (uint32_t)buffer[3] << 16 | (uint32_t)buffer[4] << 8 | (uint32_t)buffer[5];
+
+            DiodeData.storageRed[DiodeData.head] = temp_red_data & 0x3FFFF; // Mask off unused upper bits (keep only 18-bit data)
+            DiodeData.storageIr[DiodeData.head] = temp_ir_data & 0x3FFFF;
+            DiodeData.head++;
+
+            if (DiodeData.head == STORAGE_SIZE)
+                DiodeData.head = 0;
+
+            if (DiodeData.head == DiodeData.tail) {
+                DiodeData.tail++;
+
+                if (DiodeData.tail == STORAGE_SIZE)
+                    DiodeData.tail = 0;
+            }
         }
-
-        uint32_t temp_red_data = (uint32_t)buffer[0] << 16 | (uint32_t)buffer[1] << 8 | (uint32_t)buffer[2];
-        uint32_t temp_ir_data = (uint32_t)buffer[3] << 16 | (uint32_t)buffer[4] << 8 | (uint32_t)buffer[5];
-
-        DiodeData.Red = temp_red_data & 0x3FFFF; // Mask off unused upper bits (keep only 18-bit data)
-        DiodeData.Ir = temp_ir_data & 0x3FFFF;
-
     }
 
+}
 
+uint16_t MAX30102::available() {
+    int16_t number_of_samples = DiodeData.head - DiodeData.tail;
+    if (number_of_samples < 0)
+        number_of_samples += STORAGE_SIZE;
+
+    return (uint16_t)number_of_samples;
+}
+
+MaxSample MAX30102::readSample() {
+    MaxSample result = {0, 0};
+
+    if (available() > 0) {
+        result.Red = DiodeData.storageRed[DiodeData.tail];
+        result.Ir = DiodeData.storageIr[DiodeData.tail];
+
+        DiodeData.tail++;
+        if (DiodeData.tail == STORAGE_SIZE)
+            DiodeData.tail = 0;
+    }
+
+    return result;
 }
