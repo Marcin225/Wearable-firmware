@@ -13,19 +13,19 @@ void MPU6050::writeRegister(uint8_t reg, uint8_t value) {
     Wire.endTransmission();
 }
 
-uint8_t MPU6050::readRegister(uint8_t reg) {
+int MPU6050::readRegister(uint8_t reg) {
     Wire.beginTransmission(_i2caddr);
     Wire.write(reg);
-    Wire.endTransmission(false);
+    Wire.endTransmission();
 
     Wire.requestFrom(_i2caddr, (uint8_t) 1);
     uint8_t value = 0;
 
     if (Wire.available()) {
-        value = Wire.read();
+        return value = Wire.read();
     }
 
-    return value;
+    return -1;
 }
 
 bool MPU6050::begin() {
@@ -34,13 +34,22 @@ bool MPU6050::begin() {
 
     writeRegister(MPU6050_PWR_MGMT_1, 0x80); // 0x80 - Reset
 
+    bool resetSucces = false;
+    delay(10);
+
     unsigned long startTime = millis();
     while (millis() - startTime < 100)
     {
-        if ((readRegister(MPU6050_PWR_MGMT_1) & 0x80) == 0)
+        if ((readRegister(MPU6050_PWR_MGMT_1) & 0x80) == 0) {
+            resetSucces = true;
             break;
+        }
         
-        delay(1);
+        delay(5);
+    }
+
+    if (!resetSucces) {
+        return false;
     }
 
     writeRegister(MPU6050_PWR_MGMT_1, 0x01); // Wakes up the MPU6050 
@@ -76,7 +85,7 @@ void MPU6050::wakeUp() {
 void MPU6050::readNewData() {
     Wire.beginTransmission(_i2caddr);
     Wire.write(MPU6050_ACCEL_XOUT_H);
-    Wire.endTransmission(false);
+    Wire.endTransmission();
 
     Wire.requestFrom(_i2caddr, (uint8_t) 14);
 

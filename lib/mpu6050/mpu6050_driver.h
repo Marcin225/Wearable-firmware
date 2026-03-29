@@ -3,9 +3,9 @@
 #ifndef MPU6050_DRIVER_H
 #define MPU6050_DRIVER_H
 
-#define STORAGE_SIZE                    256
+#define STORAGE_SIZE                256
 
-#define I2C_BUFFER_LENGTH               128 // esp32 c3 i2c buffer length
+#define I2C_BUFFER_LENGTH           128 // esp32 c3 i2c buffer length
 
 #define MPU6050_I2C_ADDRESS         0x68
 
@@ -48,7 +48,7 @@ class MPU6050 {
         uint8_t _i2caddr;
         
         void writeRegister(uint8_t reg, uint8_t value);
-        uint8_t readRegister(uint8_t reg);
+        int readRegister(uint8_t reg);
 
         struct MPU6050_SensorData {
             MpuSample StorageData[STORAGE_SIZE];

@@ -13,19 +13,25 @@ void MAX30102::writeRegister(uint8_t reg, uint8_t value) {
     Wire.endTransmission();
 }
 
-uint8_t MAX30102::readRegister(uint8_t reg) {
+int MAX30102::readRegister(uint8_t reg) {
     Wire.beginTransmission(_i2caddr);
     Wire.write(reg);
-    Wire.endTransmission(false);
-    Wire.requestFrom(_i2caddr, (uint8_t) 1);
+    if (Wire.endTransmission(false) != 0) {
+        return -1;
+    }
+
+    int n = Wire.requestFrom(_i2caddr, (uint8_t) 1);
+    if (n != 1) {
+        return -1;
+    }
 
     uint8_t value = 0;
 
-    if (Wire.available()) 
-        value = Wire.read();
-    
+    if (Wire.available()) {
+        return value = Wire.read();
+    }
 
-    return value;
+    return -1;
 }
 
 bool MAX30102::begin() {
@@ -34,13 +40,22 @@ bool MAX30102::begin() {
 
     writeRegister(MAX30102_MODE_CONFIGURATION, MAX30102_RESET);
 
+    bool resetSucces = false;
+    delay(10);
+
     unsigned long startTime = millis();
     while (millis() - startTime < 100)
     {
-        if ((readRegister(MAX30102_MODE_CONFIGURATION) & MAX30102_RESET) == 0)
+        if ((readRegister(MAX30102_MODE_CONFIGURATION) & MAX30102_RESET) == 0) {
+            resetSucces = true;
             break;
+        }
         
-        delay(1);
+        delay(5);
+    }
+
+    if (!resetSucces) {
+        return false;
     }
 
     setup();
@@ -85,8 +100,8 @@ void MAX30102::wakeUp() {
 }
 
 void MAX30102::readNewData() {
-    uint8_t read_pointer = MAX30102::readRegister(MAX30102_FIFO_READ_POINTER);
-    uint8_t write_pointer = MAX30102::readRegister(MAX30102_FIFO_WRITE_POINTER);
+    uint8_t read_pointer = readRegister(MAX30102_FIFO_READ_POINTER);
+    uint8_t write_pointer = readRegister(MAX30102_FIFO_WRITE_POINTER);
 
     if (read_pointer == write_pointer) {
         return;
@@ -116,6 +131,10 @@ void MAX30102::readNewData() {
 
         Wire.requestFrom(_i2caddr, (uint8_t) to_get);
         while (to_get > 0) {
+
+            if (Wire.available() < 6) {
+                return;
+            }
 
             uint8_t buffer[6];
             int i = 0;

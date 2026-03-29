@@ -54,7 +54,7 @@ class MAX30102 {
         uint8_t _i2caddr;
 
         void writeRegister(uint8_t reg, uint8_t value);
-        uint8_t readRegister(uint8_t reg);
+        int readRegister(uint8_t reg);
 
         struct SensorData {
             uint32_t storageRed[STORAGE_SIZE];
