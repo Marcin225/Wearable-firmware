@@ -16,17 +16,6 @@ struct PulseData {
     int head = 0;
 };
 
-
-// struct HistoryData {
-//     int32_t HrHistory[HISTORY_SIZE];
-//     int32_t SpO2History[HISTORY_SIZE];
-//     int tail_HR = 0;
-//     int tail_SpO2 = 0;
-//     int History_idx_HR = 0;
-//     int History_idx_SpO2 = 0;
-// };
-
-
 struct HistoryData {
     int32_t HrHistory[HISTORY_SIZE];
     int32_t SpO2History[HISTORY_SIZE];
