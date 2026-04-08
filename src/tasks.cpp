@@ -87,10 +87,11 @@ void vCollectAndFilterDataTask(void *pvParameters) {
                 bufferIdx = 0;
                 sumRed = 0;
                 sumIr = 0; 
+
+                Serial.print("Minimalny wolny stos (High Water Mark): ");
+                Serial.println(uxTaskGetStackHighWaterMark(NULL));
             }
         }
-        // Serial.print("Minimalny wolny stos (High Water Mark): ");
-        // Serial.println(uxTaskGetStackHighWaterMark(NULL));
     }
 }
 
@@ -112,12 +113,14 @@ void vCalculateVitalsTask(void *pvParameters) {
             Serial.print(" BPM | SpO2: ");
             Serial.print(currentSpO2);
             Serial.println(" %");
+        }else {
+            Serial.println("Calculating...");
         }
 
         if (xQueueSend(emptyQueue, &processingBuffer, portMAX_DELAY) != pdTRUE) {
             Serial.println("Failed to return buffer to emptyQueue");
         }
-        // Serial.print("Minimalny wolny stos (High Water Mark): ");
-        // Serial.println(uxTaskGetStackHighWaterMark(NULL));
+        Serial.print("Minimalny wolny stos (High Water Mark): ");
+        Serial.println(uxTaskGetStackHighWaterMark(NULL));
     }
 }
