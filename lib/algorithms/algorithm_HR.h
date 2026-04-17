@@ -11,6 +11,7 @@ extern const uint8_t SpO2Table[184];
 struct PulseData {
     int32_t acRed[BUFFER_SIZE];
     int32_t acIr[BUFFER_SIZE];
+    int32_t motionNoise[BUFFER_SIZE];
     int32_t dcRed;
     int32_t dcIr;
     int head = 0;
@@ -34,6 +35,7 @@ class FilterAlgorithms {
         static int32_t lowPassFilter(int32_t sample, int32_t &prevOutput, int shift = 2);
         static int32_t highPassFilter(int32_t sample, int32_t &prevFilterState, int16_t alpha = 31739);
         static int32_t medianFilter(int32_t current, int32_t *buffer);
+        static int32_t absValueOf(int32_t x);
 };
               
 

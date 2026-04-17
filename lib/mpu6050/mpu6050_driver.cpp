@@ -16,9 +16,15 @@ void MPU6050::writeRegister(uint8_t reg, uint8_t value) {
 int MPU6050::readRegister(uint8_t reg) {
     Wire.beginTransmission(_i2caddr);
     Wire.write(reg);
-    Wire.endTransmission();
+    if (Wire.endTransmission(false) != 0) {
+        return -1;
+    }
 
-    Wire.requestFrom(_i2caddr, (uint8_t) 1);
+    int n = Wire.requestFrom(_i2caddr, (uint8_t) 1);
+    if (n != 1) {
+        return -1;
+    }
+
     uint8_t value = 0;
 
     if (Wire.available()) {
@@ -61,7 +67,7 @@ bool MPU6050::begin() {
 }
 
 void MPU6050::setup() {
-    writeRegister(MPU6050_SMPLRT_DIV, 0x13); // 0x13 - Sample Rate = Gyroscope Output Rate / (1 + SMPLRT_DIV)
+    writeRegister(MPU6050_SMPLRT_DIV, 0x09); // 0x09 - Sample Rate (100 hz) = Gyroscope Output Rate / (1 + SMPLRT_DIV)
 
     writeRegister(MPU6050_CONFIG, 0x03); // 0x03 - 44 Hz Bandwidth
 
@@ -105,8 +111,8 @@ void MPU6050::readNewData() {
     currentSample.accY = (int16_t) ((buffer[2] << 8) | buffer[3]);
     currentSample.accZ = (int16_t) ((buffer[4] << 8) | buffer[5]);
 
-    int16_t raw_temp = (int16_t) ((buffer[6] << 8) | buffer[7]);
-    currentSample.temp = (raw_temp / 340.0) + 36.53; // in degrees C
+    // int16_t raw_temp = (int16_t) ((buffer[6] << 8) | buffer[7]);
+    // currentSample.temp = (raw_temp / 340.0) + 36.53; // in degrees C
 
     currentSample.gyroX = (int16_t) ((buffer[8] << 8) | buffer[9]);
     currentSample.gyroY = (int16_t) ((buffer[10] << 8) | buffer[11]);
@@ -136,7 +142,7 @@ uint16_t MPU6050::available() {
 
 MpuSample MPU6050::readSample() {
 
-    MpuSample result = {0,0,0,0,0,0,0};
+    MpuSample result = {0,0,0,0,0,0};
 
     if (available() > 0) {
         result = mpuData.StorageData[mpuData.tail];

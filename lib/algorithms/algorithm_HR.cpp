@@ -48,6 +48,10 @@ int32_t FilterAlgorithms::highPassFilter(int32_t sample, int32_t &prevFilterStat
     return output;
 }
 
+int32_t FilterAlgorithms::absValueOf(int32_t x) {
+    return (x < 0) ? -x : x;
+}
+
 
 // Helpers
 
