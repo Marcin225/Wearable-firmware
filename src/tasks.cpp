@@ -1,5 +1,7 @@
 #include "tasks.h"
 
+// collects ppg and accel data, applies basic filtering and builds synchronized stream
+
 void vCollectAndFilterDataTask(void *pvParameters) {
     int32_t medRed[2] = {0, 0};
     int32_t medIr[2]  = {0, 0};
@@ -122,12 +124,14 @@ void vCollectAndFilterDataTask(void *pvParameters) {
                 sumRed = 0;
                 sumIr = 0; 
 
-                // Serial.print("Minimalny wolny stos (High Water Mark): ");
+                // Serial.print("Free stack (High Water Mark): ");
                 // Serial.println(uxTaskGetStackHighWaterMark(NULL));
             }
         }
     }
 }
+
+// processes buffered PPG data and estimates vital signs (HR, SpO2)
 
 void vCalculateVitalsTask(void *pvParameters) {
     PulseData *processingBuffer = NULL;
@@ -137,8 +141,11 @@ void vCalculateVitalsTask(void *pvParameters) {
     static int32_t filterWeightsIr[NLMS_NUM_OF_TAPS] = {0};
     static int32_t filterWeightsRed[NLMS_NUM_OF_TAPS] = {0};
 
-    static int32_t acIrBefore[BUFFER_SIZE];
-    static int32_t acRedBefore[BUFFER_SIZE];
+    // static int32_t acIrBefore[BUFFER_SIZE];
+    // static int32_t acRedBefore[BUFFER_SIZE];
+
+    // static int32_t noiseHistoryIr[NLMS_NUM_OF_TAPS] = {0};
+    // static int32_t noiseHistoryRed[NLMS_NUM_OF_TAPS] = {0};
 
     for (;;) {
         if (xQueueReceive(fullQueue, &processingBuffer, portMAX_DELAY) != pdTRUE || processingBuffer == NULL) {
@@ -146,45 +153,45 @@ void vCalculateVitalsTask(void *pvParameters) {
             continue;
         }
 
-        for (int i = 0; i < BUFFER_SIZE; i++) {
-            acIrBefore[i] = processingBuffer->acIr[i];
-            acRedBefore[i] = processingBuffer->acRed[i];
-        }
+        // for (int i = 0; i < BUFFER_SIZE; i++) {
+        //     acIrBefore[i] = processingBuffer->acIr[i];
+        //     acRedBefore[i] = processingBuffer->acRed[i];
+        // }
         
-        NLMS(processingBuffer->motionNoise, filterWeightsIr, processingBuffer->acIr, 
-            512, 1, NLMS_NUM_OF_TAPS, BUFFER_SIZE);
-        NLMS(processingBuffer->motionNoise, filterWeightsRed, processingBuffer->acRed, 
-            512, 1, NLMS_NUM_OF_TAPS, BUFFER_SIZE);
+        // NLMS(processingBuffer->motionNoise, filterWeightsIr, processingBuffer->acIr, 
+        //     512, 1, NLMS_NUM_OF_TAPS, BUFFER_SIZE, noiseHistoryIr);
+        // NLMS(processingBuffer->motionNoise, filterWeightsRed, processingBuffer->acRed, 
+        //     512, 1, NLMS_NUM_OF_TAPS, BUFFER_SIZE, noiseHistoryRed);
 
         int currentHR = 0;
         int32_t currentSpO2 = processor.calculateSpO2(*processingBuffer, SAMPLING_RATE, currentHR);
 
-        for (int i = 0; i < BUFFER_SIZE; i++) {
-            Serial.print(acIrBefore[i]);
-            Serial.print(',');
-            Serial.print(processingBuffer->acIr[i]);
-            Serial.print(',');
-            Serial.print(acRedBefore[i]);
-            Serial.print(',');
-            Serial.print(processingBuffer->acRed[i]);
-            Serial.print(',');
-            Serial.println(processingBuffer->motionNoise[i]);
-        }
-
-        // if (currentHR > 0 && currentSpO2 > 0) {
-        //     Serial.print("HR: ");
-        //     Serial.print(currentHR);
-        //     Serial.print(" BPM | SpO2: ");
-        //     Serial.print(currentSpO2);
-        //     Serial.println(" %");
-        // }else {
-        //     Serial.println("Calculating...");
+        // for (int i = 0; i < BUFFER_SIZE; i++) {
+        //     Serial.print(acIrBefore[i]);
+        //     Serial.print(',');
+        //     Serial.print(processingBuffer->acIr[i]);
+        //     Serial.print(',');
+        //     Serial.print(acRedBefore[i]);
+        //     Serial.print(',');
+        //     Serial.print(processingBuffer->acRed[i]);
+        //     Serial.print(',');
+        //     Serial.println(processingBuffer->motionNoise[i]);
         // }
+
+        if (currentHR > 0 && currentSpO2 > 0) {
+            Serial.print("HR: ");
+            Serial.print(currentHR);
+            Serial.print(" BPM | SpO2: ");
+            Serial.print(currentSpO2);
+            Serial.println(" %");
+        }else {
+            Serial.println("Calculating...");
+        }
 
         if (xQueueSend(emptyQueue, &processingBuffer, portMAX_DELAY) != pdTRUE) {
             Serial.println("Failed to return buffer to emptyQueue");
         }
-        // Serial.print("Minimalny wolny stos (High Water Mark): ");
+        // Serial.print("Free stack (High Water Mark): ");
         // Serial.println(uxTaskGetStackHighWaterMark(NULL));
     }
 }

@@ -20,7 +20,7 @@ void setup() {
   }else {
     Serial.println("Mpu6050 Ok");
   }
-
+  // Queue for pulse & motion data between tasks
   emptyQueue = xQueueCreate(2, sizeof(PulseData *));
   fullQueue = xQueueCreate(2, sizeof(PulseData *));
 
