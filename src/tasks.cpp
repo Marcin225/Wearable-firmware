@@ -3,27 +3,19 @@
 // collects ppg and accel data, applies basic filtering and builds synchronized stream
 
 void vCollectAndFilterDataTask(void *pvParameters) {
-    int32_t medRed[2] = {0, 0};
-    int32_t medIr[2]  = {0, 0};
-    int32_t hpRedState = 0;
-    int32_t hpIrState  = 0;
-    int32_t lpRedOut = 0;
-    int32_t lpIrOut  = 0;
-    int64_t sumRed = 0;
-    int64_t sumIr  = 0;
+    SystemContext *sysCtx = (SystemContext *)pvParameters;
 
-    int32_t lpAccXOut = 0;
-    int32_t lpAccYOut = 0;
-    int32_t lpAccZOut = 0;
+    OpticalChannel redChannel;
+    OpticalChannel irChannel;
+    AxisFilter accX, accY, accZ;
+
     int32_t lpMotionOut = 0;
     int32_t lpMotionDc = 0;
-    MpuSample rawMpuData = {0,0,0,0,0,0};
-
     int bufferIdx = 0;
 
     PulseData *currentBuffer = NULL;
 
-    if (xQueueReceive(emptyQueue, &currentBuffer, portMAX_DELAY) != pdTRUE || currentBuffer == NULL) {
+    if (xQueueReceive(sysCtx->emptyQueue, &currentBuffer, portMAX_DELAY) != pdTRUE || currentBuffer == NULL) {
         Serial.println("Failed to get initial empty buffer");
         vTaskDelete(NULL);
         return;
@@ -34,31 +26,26 @@ void vCollectAndFilterDataTask(void *pvParameters) {
     for (;;) {
         vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(10));
 
-        maxSensor.readNewData();
-        mpuSensor.readNewData();
+        sysCtx->maxSensor.readNewData();
+        sysCtx->mpuSensor.readNewData();
 
-        while (maxSensor.available()) {
-            MaxSample rawMaxData = maxSensor.readSample();
+        while (sysCtx->maxSensor.available()) {
+            MaxSample rawMaxData = sysCtx->maxSensor.readSample();
+            MpuSample rawMpuData = {0,0,0,0,0,0};
 
-            while (mpuSensor.available()) {
-                rawMpuData = mpuSensor.readSample();
+            while (sysCtx->mpuSensor.available()) {
+                rawMpuData = sysCtx->mpuSensor.readSample();
             }
 
             if (rawMaxData.Ir < FINGER_IR_THRESHOLD) {
-                medRed[0] = 0; medRed[1] = 0;
-                medIr[0] = 0; medIr[1] = 0;
-                hpRedState = 0;
-                hpIrState  = 0;
-                lpRedOut = 0;
-                lpIrOut  = 0;
-                sumRed = 0;
-                sumIr  = 0;
-                lpAccXOut   = 0;
-                lpAccYOut   = 0;
-                lpAccZOut   = 0;
+                redChannel.reset();
+                irChannel.reset();
+                accX.reset();
+                accY.reset();
+                accZ.reset();
                 lpMotionOut = 0;
                 lpMotionDc  = 0;
-                rawMpuData = {0,0,0,0,0,0};
+
                 bufferIdx = 0;
                 currentBuffer->dcRed = 0;
                 currentBuffer->dcIr = 0;
@@ -66,63 +53,43 @@ void vCollectAndFilterDataTask(void *pvParameters) {
                 continue;
             }
 
-            int32_t cleanRed = filters.medianFilter((int32_t)rawMaxData.Red, medRed);
-            int32_t cleanIr = filters.medianFilter((int32_t)rawMaxData.Ir, medIr);
+            currentBuffer->acRed[bufferIdx] = redChannel.process((int32_t)rawMaxData.Red, sysCtx->filters);
+            currentBuffer->acIr[bufferIdx] = irChannel.process((int32_t)rawMaxData.Ir, sysCtx->filters);
 
-            medRed[1] = medRed[0]; medRed[0] = rawMaxData.Red;
-            medIr[1] = medIr[0]; medIr[0] = rawMaxData.Ir;
+            int32_t cleanAccelx = accX.process(rawMpuData.accX, sysCtx->filters);
+            int32_t cleanAccely = accY.process(rawMpuData.accY, sysCtx->filters);
+            int32_t cleanAccelz = accZ.process(rawMpuData.accZ, sysCtx->filters);
 
-            sumRed += cleanRed;
-            sumIr += cleanIr;
+            int32_t motion = sysCtx->filters.absValueOf(cleanAccelx) + sysCtx->filters.absValueOf(cleanAccely) 
+                            + sysCtx->filters.absValueOf(cleanAccelz);
 
-            int32_t acRed = filters.highPassFilter(cleanRed, hpRedState);
-            int32_t acIr = filters.highPassFilter(cleanIr, hpIrState);
+            motion = sysCtx->filters.lowPassFilter(motion, lpMotionOut);
 
-            acRed = filters.lowPassFilter(acRed, lpRedOut);
-            acIr = filters.lowPassFilter(acIr, lpIrOut);
-
-            currentBuffer->acRed[bufferIdx] = acRed;
-            currentBuffer->acIr[bufferIdx] = acIr;
-
-            int32_t cleanAccelx = rawMpuData.accX - filters.lowPassFilter(rawMpuData.accX, lpAccXOut);
-            int32_t cleanAccely = rawMpuData.accY - filters.lowPassFilter(rawMpuData.accY, lpAccYOut);
-            int32_t cleanAccelz = rawMpuData.accZ - filters.lowPassFilter(rawMpuData.accZ, lpAccZOut);
-
-            int32_t motion = filters.absValueOf(cleanAccelx) + filters.absValueOf(cleanAccely) 
-                            + filters.absValueOf(cleanAccelz);
-
-            motion = filters.lowPassFilter(motion, lpMotionOut);
-
-            int32_t finalMotion = motion - filters.lowPassFilter(motion, lpMotionDc, 4);
+            int32_t finalMotion = motion - sysCtx->filters.lowPassFilter(motion, lpMotionDc, 4);
 
             currentBuffer->motionNoise[bufferIdx] = finalMotion;
 
             bufferIdx++;
 
             if (bufferIdx >= BUFFER_SIZE) {
-                currentBuffer->dcRed = (int32_t)(sumRed / BUFFER_SIZE);
-                currentBuffer->dcIr = (int32_t)(sumIr / BUFFER_SIZE);
+                currentBuffer->dcRed = (int32_t)(redChannel.getSum() / BUFFER_SIZE);
+                currentBuffer->dcIr = (int32_t)(irChannel.getSum() / BUFFER_SIZE);
 
                 // Serial.println(finalMotion);
 
-                if (xQueueSend(fullQueue, &currentBuffer, portMAX_DELAY) != pdTRUE) {
-                    Serial.println("Queue is full");
-                    bufferIdx = 0;
-                    sumRed = 0;
-                    sumIr = 0;
-
-                    continue;
+                if (xQueueSend(sysCtx->fullQueue, &currentBuffer, portMAX_DELAY) != pdTRUE) {
+                    Serial.println("Queue is full -> dropping packet");
                 }
 
-                if (xQueueReceive(emptyQueue, &currentBuffer, portMAX_DELAY) != pdTRUE || currentBuffer == NULL) {
+                if (xQueueReceive(sysCtx->emptyQueue, &currentBuffer, portMAX_DELAY) != pdTRUE || currentBuffer == NULL) {
                     Serial.println("Failed to receive next empty buffer");
                     vTaskDelete(NULL);
                     return;
                 }
 
                 bufferIdx = 0;
-                sumRed = 0;
-                sumIr = 0; 
+                redChannel.resetSum();
+                irChannel.resetSum();
 
                 // Serial.print("Free stack (High Water Mark): ");
                 // Serial.println(uxTaskGetStackHighWaterMark(NULL));
@@ -134,24 +101,24 @@ void vCollectAndFilterDataTask(void *pvParameters) {
 // processes buffered PPG data and estimates vital signs (HR, SpO2)
 
 void vCalculateVitalsTask(void *pvParameters) {
+    SystemContext *sysCtx = (SystemContext *)pvParameters;
     PulseData *processingBuffer = NULL;
-    
-    #define NLMS_NUM_OF_TAPS                            32
 
     static int32_t filterWeightsIr[NLMS_NUM_OF_TAPS] = {0};
     static int32_t filterWeightsRed[NLMS_NUM_OF_TAPS] = {0};
+    static int32_t noiseHistoryIr[NLMS_NUM_OF_TAPS] = {0};
+    static int32_t noiseHistoryRed[NLMS_NUM_OF_TAPS] = {0};
 
     // static int32_t acIrBefore[BUFFER_SIZE];
     // static int32_t acRedBefore[BUFFER_SIZE];
 
-    // static int32_t noiseHistoryIr[NLMS_NUM_OF_TAPS] = {0};
-    // static int32_t noiseHistoryRed[NLMS_NUM_OF_TAPS] = {0};
-
     for (;;) {
-        if (xQueueReceive(fullQueue, &processingBuffer, portMAX_DELAY) != pdTRUE || processingBuffer == NULL) {
+        if (xQueueReceive(sysCtx->fullQueue, &processingBuffer, portMAX_DELAY) != pdTRUE || processingBuffer == NULL) {
             Serial.println("Failed to receive full buffer");
             continue;
         }
+
+        // Debugging
 
         // for (int i = 0; i < BUFFER_SIZE; i++) {
         //     acIrBefore[i] = processingBuffer->acIr[i];
@@ -164,7 +131,9 @@ void vCalculateVitalsTask(void *pvParameters) {
         //     512, 1, NLMS_NUM_OF_TAPS, BUFFER_SIZE, noiseHistoryRed);
 
         int currentHR = 0;
-        int32_t currentSpO2 = processor.calculateSpO2(*processingBuffer, SAMPLING_RATE, currentHR);
+        int32_t currentSpO2 = sysCtx->processor.calculateSpO2(*processingBuffer, SAMPLING_RATE_HZ, currentHR);
+
+        // Debugging
 
         // for (int i = 0; i < BUFFER_SIZE; i++) {
         //     Serial.print(acIrBefore[i]);
@@ -188,9 +157,12 @@ void vCalculateVitalsTask(void *pvParameters) {
             Serial.println("Calculating...");
         }
 
-        if (xQueueSend(emptyQueue, &processingBuffer, portMAX_DELAY) != pdTRUE) {
+        if (xQueueSend(sysCtx->emptyQueue, &processingBuffer, portMAX_DELAY) != pdTRUE) {
             Serial.println("Failed to return buffer to emptyQueue");
         }
+
+        // Stack Size
+
         // Serial.print("Free stack (High Water Mark): ");
         // Serial.println(uxTaskGetStackHighWaterMark(NULL));
     }

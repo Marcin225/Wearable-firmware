@@ -1,10 +1,10 @@
 #include "algorithm_NLMS.h"
 
 void NLMS(int32_t *referenceNoise, int32_t *filterWeights, int32_t *ACData, 
-        int32_t mu, int32_t eps, const int NLMS_NUM_OF_TAPS, const int bufferSize, int32_t *noiseHistory) {
+        int32_t mu, int32_t eps, const int numOfTaps, const int bufferSize, int32_t *noiseHistory) {
     
     const int SHIFT = 15;                   // Q15
-    const int M = NLMS_NUM_OF_TAPS;
+    const int M = numOfTaps;
     
     for (int n = 0; n < bufferSize; n++) {
         int64_t estimatedNoise = 0;

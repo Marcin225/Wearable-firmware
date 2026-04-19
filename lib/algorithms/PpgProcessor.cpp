@@ -1,4 +1,4 @@
-#include "algorithm_HR.h"
+#include "PpgProcessor.h"
 #include <Arduino.h>
 
 // SpO2 table
@@ -379,7 +379,7 @@ int32_t SignalProcessingAlgorithms::calculateSpO2(const PulseData &p, int sampli
             if (i32_abs(heartRate - median_result(historyData.HrHistory, HISTORY_SIZE)) > 10) {
                 reject_counter_hr += 1;
 
-                if (reject_counter_hr < 5) {
+                if (reject_counter_hr < 4) {
                     heartRate = 0;
                 }else {
                     historyData.count_HR = 0;
@@ -467,7 +467,7 @@ int32_t SignalProcessingAlgorithms::calculateSpO2(const PulseData &p, int sampli
             if (i32_abs(SpO2 - median_result(historyData.SpO2History, HISTORY_SIZE)) >= 2) {
                 reject_counter_spo2++;
 
-                if (reject_counter_spo2 < 5) {
+                if (reject_counter_spo2 < 4) {
                     SpO2 = 0;
                 }else {
                     historyData.count_SpO2 = 0;
