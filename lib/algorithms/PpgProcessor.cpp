@@ -1,4 +1,4 @@
-#include "algorithm_HR.h"
+#include "PpgProcessor.h"
 #include <Arduino.h>
 
 // SpO2 table
@@ -46,6 +46,10 @@ int32_t FilterAlgorithms::highPassFilter(int32_t sample, int32_t &prevFilterStat
     prevFilterState = filterState;
 
     return output;
+}
+
+int32_t FilterAlgorithms::absValueOf(int32_t x) {
+    return (x < 0) ? -x : x;
 }
 
 
@@ -248,7 +252,7 @@ static int estimateHR_autocorr(const int32_t *sig, int n, int fs, int &autoConfi
 
         int64_t score2 = scoreTab[idx];
 
-        if (score2 * 100 > bestScore * 90) {
+        if (score2 * 100 > bestScore * 80) {
             autoConfidenceScore -= 40;
         }
     }
@@ -375,7 +379,7 @@ int32_t SignalProcessingAlgorithms::calculateSpO2(const PulseData &p, int sampli
             if (i32_abs(heartRate - median_result(historyData.HrHistory, HISTORY_SIZE)) > 10) {
                 reject_counter_hr += 1;
 
-                if (reject_counter_hr < 3) {
+                if (reject_counter_hr < 4) {
                     heartRate = 0;
                 }else {
                     historyData.count_HR = 0;
@@ -463,7 +467,7 @@ int32_t SignalProcessingAlgorithms::calculateSpO2(const PulseData &p, int sampli
             if (i32_abs(SpO2 - median_result(historyData.SpO2History, HISTORY_SIZE)) >= 2) {
                 reject_counter_spo2++;
 
-                if (reject_counter_spo2 < 3) {
+                if (reject_counter_spo2 < 4) {
                     SpO2 = 0;
                 }else {
                     historyData.count_SpO2 = 0;
