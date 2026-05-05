@@ -69,6 +69,49 @@ The project runs on a **Seeed XIAO ESP32-C3**, uses **FreeRTOS**, **BLE** commun
   
 ---
 
+##  Wiring Table
+
+Both the heart rate sensor (MAX30102) and the IMU (MPU6050) share the same I2C bus and 3.3V power supply from the microcontroller.
+
+| Function / Signal | XIAO ESP32-C3 | MAX30102 | MPU6050 | Li-Po Battery (3.7V 400mAh) |
+| :--- | :--- | :--- | :--- | :--- |
+| **Power (3.3V)** | `3V3` | `VCC` | `VCC` | - |
+| **Ground (GND)** | `GND` | `GND` | `GND` | - |
+| **I2C SDA** | `D4` | `SDA` | `SDA` | - |
+| **I2C SCL** | `D5` | `SCL` | `SCL` | - |
+| **Battery (+)** | `B+` *(bottom pad)* | - | - | Red wire `+` |
+| **Battery (-)** | `B-` *(bottom pad)* | - | - | Black wire `-` |
+
+---
+
+## Signal Processing Pipeline
+
+The firmware processes PPG data from the MAX30102 sensor using the following pipeline:
+
+```
+Raw RED / IR samples
+        ↓
+Median filtering
+        ↓
+High-pass filtering
+        ↓
+Low-pass filtering
+        ↓
+AC/DC component extraction
+        ↓
+Peak detection + autocorrelation
+        ↓
+Heart rate estimation
+        ↓
+Ratio of Ratios calculation
+        ↓
+SpO₂ lookup table
+        ↓
+Result validation and smoothing
+```
+
+---
+
 ## Project structure
 
 ```txt
@@ -99,8 +142,7 @@ src/
 1.  Clone the repository:
 
 ```
-https://github.com/Marcin225/Werable-firmware
-cd Werable-firmware
+https://github.com/Marcin225/Wearable-firmware
 ```
 
 2.  Open the project in **VS Code + PlatformIO**.
