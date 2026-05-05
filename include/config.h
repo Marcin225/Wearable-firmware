@@ -1,6 +1,8 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
+// global system configuration parameters
+
 #define I2C_SDA_PIN                 6
 #define I2C_SCL_PIN                 7
 

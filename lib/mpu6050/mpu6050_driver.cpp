@@ -34,6 +34,7 @@ int MPU6050::readRegister(uint8_t reg) {
     return -1;
 }
 
+// verify hardware identity and initialize sensor settings begin() -> setup()
 bool MPU6050::begin() {
     if (readRegister(MPU6050_WHO_AM_I) != MPU6050_DEVICE_ID)
         return false;
@@ -88,6 +89,7 @@ void MPU6050::wakeUp() {
     writeRegister(MPU6050_PWR_MGMT_1, 0x01); // 0x01 sleep OFF and sets the clock source to the X-axis gyroscope
 }
 
+// reads 6 bytes of accel and gyro data and push it into ring buffer
 void MPU6050::readNewData() {
     Wire.beginTransmission(_i2caddr);
     Wire.write(MPU6050_ACCEL_XOUT_H);
@@ -111,8 +113,7 @@ void MPU6050::readNewData() {
     currentSample.accY = (int16_t) ((buffer[2] << 8) | buffer[3]);
     currentSample.accZ = (int16_t) ((buffer[4] << 8) | buffer[5]);
 
-    // int16_t raw_temp = (int16_t) ((buffer[6] << 8) | buffer[7]);
-    // currentSample.temp = (raw_temp / 340.0) + 36.53; // in degrees C
+    // skipping temperature byte
 
     currentSample.gyroX = (int16_t) ((buffer[8] << 8) | buffer[9]);
     currentSample.gyroY = (int16_t) ((buffer[10] << 8) | buffer[11]);
@@ -132,6 +133,7 @@ void MPU6050::readNewData() {
 
 }
 
+// return total count of unread samples
 uint16_t MPU6050::available() {
     int16_t number_of_samples = mpuData.head - mpuData.tail;
     if (number_of_samples < 0)

@@ -36,7 +36,8 @@ void vCollectAndFilterDataTask(void *pvParameters) {
             while (sysCtx->mpuSensor.available()) {
                 rawMpuData = sysCtx->mpuSensor.readSample();
             }
-
+            
+            // finger detection: drop data and reset signal filters if the sensor is uncovered
             if (rawMaxData.Ir < FINGER_IR_THRESHOLD) {
                 redChannel.reset();
                 irChannel.reset();
@@ -53,6 +54,7 @@ void vCollectAndFilterDataTask(void *pvParameters) {
                 continue;
             }
 
+            // DSP pipeline: remove DC offset -> apply low-pass filtering -> sync motion data with heart rate signal
             currentBuffer->acRed[bufferIdx] = redChannel.process((int32_t)rawMaxData.Red, sysCtx->filters);
             currentBuffer->acIr[bufferIdx] = irChannel.process((int32_t)rawMaxData.Ir, sysCtx->filters);
 
@@ -90,11 +92,12 @@ void vCollectAndFilterDataTask(void *pvParameters) {
                 bufferIdx = 0;
                 redChannel.resetSum();
                 irChannel.resetSum();
-
-                // Serial.print("Free stack (High Water Mark): ");
-                // Serial.println(uxTaskGetStackHighWaterMark(NULL));
             }
         }
+        // Stack Size
+
+        // Serial.print("Free stack (High Water Mark): ");
+        // Serial.println(uxTaskGetStackHighWaterMark(NULL));
     }
 }
 
@@ -109,22 +112,13 @@ void vCalculateVitalsTask(void *pvParameters) {
     static int32_t noiseHistoryIr[NLMS_NUM_OF_TAPS] = {0};
     static int32_t noiseHistoryRed[NLMS_NUM_OF_TAPS] = {0};
 
-    // static int32_t acIrBefore[BUFFER_SIZE];
-    // static int32_t acRedBefore[BUFFER_SIZE];
-
     for (;;) {
         if (xQueueReceive(sysCtx->fullQueue, &processingBuffer, portMAX_DELAY) != pdTRUE || processingBuffer == NULL) {
             Serial.println("Failed to receive full buffer");
             continue;
         }
+        // NLMS filter
 
-        // Debugging
-
-        // for (int i = 0; i < BUFFER_SIZE; i++) {
-        //     acIrBefore[i] = processingBuffer->acIr[i];
-        //     acRedBefore[i] = processingBuffer->acRed[i];
-        // }
-        
         // NLMS(processingBuffer->motionNoise, filterWeightsIr, processingBuffer->acIr, 
         //     512, 1, NLMS_NUM_OF_TAPS, BUFFER_SIZE, noiseHistoryIr);
         // NLMS(processingBuffer->motionNoise, filterWeightsRed, processingBuffer->acRed, 
@@ -132,20 +126,6 @@ void vCalculateVitalsTask(void *pvParameters) {
 
         int currentHR = 0;
         int32_t currentSpO2 = sysCtx->processor.calculateSpO2(*processingBuffer, SAMPLING_RATE_HZ, currentHR);
-
-        // Debugging
-
-        // for (int i = 0; i < BUFFER_SIZE; i++) {
-        //     Serial.print(acIrBefore[i]);
-        //     Serial.print(',');
-        //     Serial.print(processingBuffer->acIr[i]);
-        //     Serial.print(',');
-        //     Serial.print(acRedBefore[i]);
-        //     Serial.print(',');
-        //     Serial.print(processingBuffer->acRed[i]);
-        //     Serial.print(',');
-        //     Serial.println(processingBuffer->motionNoise[i]);
-        // }
 
         if (currentHR > 0 && currentSpO2 > 0) {
             Serial.print("HR: ");
