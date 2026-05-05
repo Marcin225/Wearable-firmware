@@ -16,8 +16,9 @@ The project runs on a **Seeed XIAO ESP32-C3**, uses **FreeRTOS**, **BLE** commun
 ---  
   
 ## Demo  
-  
-https://github.com/user-attachments/assets/80e574f7-a5c9-4611-a4b2-5a76588d8c59
+<p align="center">
+  <video src="https://github.com/user-attachments/assets/80e574f7-a5c9-4611-a4b2-5a76588d8c59"></video>
+</p>
     
 ---  
   
