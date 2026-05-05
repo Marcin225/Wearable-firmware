@@ -1,5 +1,4 @@
 #include "PpgProcessor.h"
-#include <Arduino.h>
 
 // SpO2 table
 
