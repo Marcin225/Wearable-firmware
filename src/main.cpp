@@ -10,6 +10,8 @@ void setup() {
   delay(4000);
   Serial.begin(115200);
 
+  // Init I2C, sensors and tasks with queues
+
   Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN);
   delay(300);
 
@@ -18,13 +20,20 @@ void setup() {
   } else {
     Serial.println("Max30102 Ok");
   }
+  delay(20);
 
   if (!sysContext.mpuSensor.begin()) {
     Serial.println("Mpu6050 Not Found / Init Error");
   }else {
     Serial.println("Mpu6050 Ok");
   }
+
+  if (!sysContext.BLE.begin()) {
+    Serial.println("BLE Init Error");
+  }
+
   // Queue for pulse & motion data between tasks
+
   sysContext.emptyQueue = xQueueCreate(2, sizeof(PulseData *));
   sysContext.fullQueue = xQueueCreate(2, sizeof(PulseData *));
 
@@ -51,5 +60,5 @@ void setup() {
 }
 
 void loop() {
-
+  // not used, RTOS tasks manage all code execution
 }

@@ -10,7 +10,7 @@
 #define MPU6050_I2C_ADDRESS         0x68
 
 #define MPU6050_DEVICE_ID           0x68
-#define MPU6050_WHO_AM_I            0x75
+#define MPU6050_WHO_AM_I            0x98 // my mpu6050 clone have 0x98, normally WHO_AM_I is 0x75
 
 #define MPU6050_CONFIG              0x1A
 #define MPU6050_GYRO_CONFIG         0x1B
@@ -24,7 +24,6 @@ struct MpuSample {
     int16_t accX;
     int16_t accY;
     int16_t accZ;
-    // float temp;
     int16_t gyroX;
     int16_t gyroY;
     int16_t gyroZ;

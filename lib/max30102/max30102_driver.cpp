@@ -34,6 +34,7 @@ int MAX30102::readRegister(uint8_t reg) {
     return -1;
 }
 
+// verify hardware identity and initialize sensor settings begin() -> setup()
 bool MAX30102::begin() {
     if (readRegister(MAX30102_PART_ID_ADDRESS) != 0x15) // 0x15 - MAX30102 part id
         return false;
@@ -99,6 +100,7 @@ void MAX30102::wakeUp() {
     writeRegister(MAX30102_MODE_CONFIGURATION, 0x00);
 }
 
+// transfer raw Red and IR samples from the hardware FIFO to the local ring buffer
 void MAX30102::readNewData() {
     uint8_t read_pointer = readRegister(MAX30102_FIFO_READ_POINTER);
     uint8_t write_pointer = readRegister(MAX30102_FIFO_WRITE_POINTER);
@@ -165,6 +167,7 @@ void MAX30102::readNewData() {
 
 }
 
+// return total count of unread samples
 uint16_t MAX30102::available() {
     int16_t number_of_samples = DiodeData.head - DiodeData.tail;
     if (number_of_samples < 0)
