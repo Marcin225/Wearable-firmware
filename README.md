@@ -99,7 +99,8 @@ src/
 1.  Clone the repository:
 
 ```
-git clone https://github.com/Marcin225/SmartBand-firmwarecd SmartBand-firmware
+https://github.com/Marcin225/Werable-firmware
+cd Werable-firmware
 ```
 
 2.  Open the project in **VS Code + PlatformIO**.
