@@ -30,6 +30,8 @@ void setup() {
 
   if (!sysContext.BLE.begin()) {
     Serial.println("BLE Init Error");
+  }else {
+    Serial.println("BLE Ok");
   }
 
   // Queue for pulse & motion data between tasks

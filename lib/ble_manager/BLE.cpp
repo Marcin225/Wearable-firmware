@@ -13,7 +13,7 @@ void ServerCallbacks::onDisconnect(NimBLEServer *pServer, NimBLEConnInfo & connI
 
 // configures the NimBLE stack, creates service, characteristic and starts broadcasting
 bool BleManager::begin() {
-    NimBLEDevice::init("Wearable");
+    NimBLEDevice::init("Wear");
     NimBLEServer *pServer = NimBLEDevice::createServer();
 
     if (pServer == nullptr) {
@@ -29,6 +29,7 @@ bool BleManager::begin() {
     NimBLEAdvertising *pAdvertising = NimBLEDevice::getAdvertising();
     pAdvertising->setMinInterval(800);
     pAdvertising->setMaxInterval(800);
+    pAdvertising->addServiceUUID("11197df9-7de7-4edd-87ca-5e589b3d2e3a");
     pAdvertising->start();
 
     return true;
