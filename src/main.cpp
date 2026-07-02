@@ -28,11 +28,11 @@ void setup() {
     Serial.println("Mpu6050 Ok");
   }
 
-  if (!sysContext.BLE.begin()) {
-    Serial.println("BLE Init Error");
-  }else {
-    Serial.println("BLE Ok");
-  }
+  // if (!sysContext.BLE.begin()) {
+  //   Serial.println("BLE Init Error");
+  // }else {
+  //   Serial.println("BLE Ok");
+  // }
 
   // Queue for pulse & motion data between tasks
 

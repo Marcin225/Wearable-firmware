@@ -141,9 +141,9 @@ void vCalculateVitalsTask(void *pvParameters) {
             Serial.println("Failed to return buffer to emptyQueue");
         }
 
-        if (sysCtx->BLE.getConnectionState()) {
-            sysCtx->BLE.sendPackage((uint8_t)currentHR, (uint8_t)currentSpO2, 99);
-        }
+        // if (sysCtx->BLE.getConnectionState()) {
+        //     sysCtx->BLE.sendPackage((uint8_t)currentHR, (uint8_t)currentSpO2, 99);
+        // }
 
         // Stack Size
 

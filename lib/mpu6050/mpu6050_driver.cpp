@@ -36,8 +36,10 @@ int MPU6050::readRegister(uint8_t reg) {
 
 // verify hardware identity and initialize sensor settings begin() -> setup()
 bool MPU6050::begin() {
-    if (readRegister(MPU6050_WHO_AM_I) != MPU6050_DEVICE_ID)
-        return false;
+    
+    //my mpu6050 clone return 0x98 as the WHO_AM_I response, a standard mpu6050 returns 0x68
+    if (readRegister(MPU6050_WHO_AM_I) != MPU6050_WHO_AM_I_ANSWER)
+        return false;   
 
     writeRegister(MPU6050_PWR_MGMT_1, 0x80); // 0x80 - Reset
 
