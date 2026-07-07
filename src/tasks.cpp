@@ -15,6 +15,8 @@ void vCollectAndFilterDataTask(void *pvParameters) {
 
     PulseData *currentBuffer = NULL;
 
+    MpuSample lastMpuData = {0, 0, 0, 0, 0, 0};
+
     if (xQueueReceive(sysCtx->emptyQueue, &currentBuffer, portMAX_DELAY) != pdTRUE || currentBuffer == NULL) {
         Serial.println("Failed to get initial empty buffer");
         vTaskDelete(NULL);
@@ -31,11 +33,14 @@ void vCollectAndFilterDataTask(void *pvParameters) {
 
         while (sysCtx->maxSensor.available()) {
             MaxSample rawMaxData = sysCtx->maxSensor.readSample();
-            MpuSample rawMpuData = {0,0,0,0,0,0};
+            // MpuSample rawMpuData = {0,0,0,0,0,0};
 
             while (sysCtx->mpuSensor.available()) {
-                rawMpuData = sysCtx->mpuSensor.readSample();
+                lastMpuData = sysCtx->mpuSensor.readSample();
+                // rawMpuData = sysCtx->mpuSensor.readSample();
             }
+
+            MpuSample rawMpuData = lastMpuData;
             
             // finger detection: drop data and reset signal filters if the sensor is uncovered
             if (rawMaxData.Ir < FINGER_IR_THRESHOLD) {
