@@ -267,6 +267,40 @@ def estimateHR_autocorr(sig, fs):
     return int(hr), int(confidence_score)
 
 
+def nlmsFilter(numOfTaps, mu, eps, bufferSize, noiseHistory, Data, filterWeights, referenceNoise):
+    SHIFT = 15
+    M = numOfTaps
+
+    for n in range(BUFFER_SIZE):
+        estimatedNoise = 0
+        power = 0
+
+        for i in range(M-1, -1, -1):
+            noiseHistory[i] = noiseHistory[i - 1]
+
+        noiseHistory[0] = referenceNoise[n]
+
+        for k in range(M):
+            estimatedNoise += filterWeights[k] * noiseHistory[k]
+            power += noiseHistory[k] * noiseHistory[k]
+
+        estimatedNoise >>= SHIFT
+
+        errorSignal = Data[n] - estimatedNoise
+        Data[n] = errorSignal
+
+        denominator = power + eps
+        if denominator <= 0:
+            continue
+
+        for k in range(M):
+            delta = (errorSignal * noiseHistory[k] * mu) << SHIFT / denominator
+            delta >>= SHIFT
+
+            filterWeights[k] += delta
+
+
+
 class PeakAutocorrHR:
     def __init__(self, fs=100):
         self.fs = fs
