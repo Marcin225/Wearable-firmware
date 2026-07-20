@@ -1,17 +1,19 @@
 """
-Command-line interface for executing and evaluating PPG signal processing methods.
+Command-line interface for executing and evaluating PPG signal processing methods
 
 Loads raw wearable sensor data, applies the specified algorithm in simulated
-real-time chunks, and outputs performance metrics, CSV results, and diagnostic plots.
+real-time chunks, and outputs performance metrics, CSV results, and diagnostic plots
 
 Args:
-    --input (str): Path to the raw wearable CSV data.
-    --method (str): Algorithm to test.
-    --fs (int): Sensor sampling frequency in Hz (default: 100).
-    --out (str): Optional path to save the resulting CSV.
-    --plot (flag): Enables diagnostic plotting for IR and RED channels.
-    --plot-seconds (int): Number of initial seconds to plot (default: 20).
-    --plot-out (str): Optional directory to save the plot images.
+    --input (str): Path to the raw wearable CSV data
+    --method (str): Algorithm to test
+    --fs (int): Sensor sampling frequency in Hz (default: 100)
+    --out (str): Optional path to save the resulting CSV
+    --plot (flag): Enables diagnostic plotting for IR and RED channels
+    --plot-seconds (int): Number of initial seconds to plot (default: 20)
+    --plot-out (str): Optional output directory for plot images
+    --ref-col (str): Optional reference HR column
+    --ref-lag-sec (float): Optional reference signal time shift in seconds
 """
 
 import os
@@ -54,8 +56,6 @@ def get_reference_hr(df, ref_col, start_idx, end_idx):
 def get_analysis_window_bounds(start, chunk_size, method, df_len):
     end = start + chunk_size
 
-    # FFT_FSM używa ring buffera 1024, więc realne okno analizy
-    # to ostatnie 1024 próbki, nie tylko aktualny chunk 256.
     analysis_window = getattr(method, "buffer", chunk_size)
 
     if analysis_window is None or analysis_window <= 0:
@@ -165,12 +165,12 @@ def run_pipeline(
             "dataset": dataset_name,
             "method": method.name,
 
-            # time_s = środek okna analizy, najlepsze do porównania z referencją
             "time_s": window_center_idx / fs,
 
             "window_start_s": window_start / fs,
             "window_end_s": window_end / fs,
-            "output_time_s": start / fs,
+
+            "output_time_s": (start + chunk_size) / fs,
 
             "hr": output["hr"],
             "peak_conf": output["peak_conf"],
@@ -183,7 +183,6 @@ def run_pipeline(
             "motion_score": output.get("motion_score", 0),
         }
 
-        # top candidates, jeśli metoda je zwraca
         for idx in [1, 2, 3]:
             row[f"top{idx}_hr"] = output.get(f"top{idx}_hr", 0)
             row[f"top{idx}_score"] = output.get(f"top{idx}_score", 0)
@@ -228,6 +227,87 @@ def run_pipeline(
     return result_df, debug_df
 
 
+def print_results_preview(result):
+    main_cols = [
+        "time_s",
+        "output_time_s",
+        "hr",
+        "ref_hr",
+        "abs_error",
+        "state",
+        "raw_hr",
+        "last_stable_hr",
+        "peak_conf",
+        "score",
+        "motion_score",
+    ]
+
+    existing_cols = [col for col in main_cols if col in result.columns]
+
+    print("\n=== RESULTS PREVIEW ===")
+
+    if len(result) == 0:
+        print("No results.")
+        return
+
+    print(result[existing_cols].round(3))
+
+
+def print_basic_metrics(metrics):
+    print("\n=== BASIC METRICS ===")
+
+    main_basic_metrics = [
+        "valid_ratio",
+        "median_hr",
+        "min_hr",
+        "max_hr",
+        "hr_mad",
+        "max_jump",
+        "spike_count_15bpm",
+        "median_local_deviation",
+    ]
+
+    for key in main_basic_metrics:
+        if key in metrics:
+            value = metrics[key]
+
+            if isinstance(value, float):
+                print(f"{key}: {value:.4f}")
+            else:
+                print(f"{key}: {value}")
+
+
+def print_reference_metrics(ref_metrics, ref_col):
+    if len(ref_metrics) == 0:
+        return
+
+    print("\n=== REFERENCE METRICS ===")
+    print("REFERENCE COLUMN:", ref_col)
+
+    main_ref_metrics = [
+        "ref_windows",
+        "valid_ref_windows",
+        "ref_valid_ratio",
+        "mae",
+        "median_abs_error",
+        "rmse",
+        "bias",
+        "max_abs_error",
+        "within_5bpm_ratio",
+        "within_10pct_or_5bpm_ratio",
+        "effective_accurate_ratio",
+    ]
+
+    for key in main_ref_metrics:
+        if key in ref_metrics:
+            value = ref_metrics[key]
+
+            if isinstance(value, float):
+                print(f"{key}: {value:.4f}")
+            else:
+                print(f"{key}: {value}")
+
+
 if __name__ == "__main__":
     import argparse
 
@@ -237,6 +317,7 @@ if __name__ == "__main__":
     parser.add_argument("--method", required=True, choices=METHODS.keys())
     parser.add_argument("--fs", type=int, default=100)
     parser.add_argument("--out", default=None)
+
     parser.add_argument("--plot", action="store_true")
     parser.add_argument("--plot-seconds", type=int, default=20)
     parser.add_argument("--plot-out", default=None)
@@ -260,24 +341,15 @@ if __name__ == "__main__":
     ref_metrics = calculate_reference_metrics(result)
 
     pd.set_option("display.max_columns", None)
-    pd.set_option("display.width", 300)
+    pd.set_option("display.width", 180)
     pd.set_option("display.max_colwidth", None)
 
-    print(result)
-
-    print("\n=== BASIC METRICS ===")
-    print("DATASET:", os.path.basename(args.input))
+    print("\nDATASET:", os.path.basename(args.input))
     print("METHOD:", args.method)
 
-    for key, value in metrics.items():
-        print(f"{key}: {value}")
-
-    if len(ref_metrics) > 0:
-        print("\n=== REFERENCE METRICS ===")
-        print("REFERENCE COLUMN:", args.ref_col)
-
-        for key, value in ref_metrics.items():
-            print(f"{key}: {value}")
+    print_results_preview(result)
+    print_basic_metrics(metrics)
+    print_reference_metrics(ref_metrics, args.ref_col)
 
     if args.out:
         out_dir = os.path.dirname(args.out)

@@ -1,3 +1,10 @@
+"""
+Circular buffer for storing the latest signal samples
+
+New chunks overwrite the oldest data when the buffer is full. Before FFT
+analysis, the wrapped parts are joined back into chronological order
+"""
+
 import numpy as np
 
 

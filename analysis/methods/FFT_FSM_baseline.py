@@ -1,3 +1,12 @@
+"""
+FFT and FSM based HR estimation method
+
+Algorithm looks for HR candidates in the PPG signal and compares them with
+motion information from the IMU. Motion-related candidates are penalized, and a
+finite-state machine decides whether the HR result should be accepted, held, or
+rejected
+"""
+
 import numpy as np
 from scipy.fft import rfft, rfftfreq
 from scipy.signal import butter, sosfilt, sosfilt_zi, windows, find_peaks
@@ -23,12 +32,12 @@ class FFT_FSM:
         self.last_hr = 0
         self.display_hr = 0.0
         self.second_last_hr = 0
-        self.TH_CF = 3.6
+        self.TH_CF = 3.4
         self.MAX_DIFF = 6
         self.last_cf = 0.0
         self.HR_SMOOTH_ALPHA = 0.2
-        self.penalty_weight = 0.85
-        self.bonus_weight = 0.02
+        self.penalty_weight = 1.10
+        self.bonus_weight = 0.015
 
         self.alert_counter = 0
         self.recovery_counter = 0

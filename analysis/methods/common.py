@@ -1,3 +1,10 @@
+"""
+Common signal-processing utilities for the HR estimation algorithms
+
+Includes filtering, peak detection, median filtering, nlms filter and autocorrelation logic
+based on the microcontroller implementation
+"""
+
 import numpy as np
 
 HISTORY_SIZE = 8

@@ -1,3 +1,9 @@
+"""
+Plots raw and filtered IR/RED PPG channels
+
+Used to check how filtering changes the signal before further HR analysis
+"""
+
 import os
 import matplotlib.pyplot as plt
 

@@ -1,3 +1,9 @@
+"""
+Baseline HR estimation method using peak detection and autocorrelation
+
+This class tests the peak-autocorrelation algorithm based on the microcontroller implementation
+"""
+
 import numpy as np
 
 from methods.common import BUFFER_SIZE, OpticalChannel, PeakAutocorrHR

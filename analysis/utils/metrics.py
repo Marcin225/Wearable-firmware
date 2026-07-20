@@ -1,3 +1,11 @@
+"""
+Metric utilities for evaluating the HR estimation algorithm
+
+Calculates key quality metrics, including valid ratio, MAE, RMSE, bias,
+maximum error, HR variability, jump/spike count, and accuracy within selected
+BPM or percentage thresholds compared with reference HR
+"""
+
 import numpy as np
 
 
@@ -141,8 +149,6 @@ def calculate_reference_metrics(result_df):
         out[f"{prefix}_within_10bpm_ratio"] = float(within_10.mean())
         out[f"{prefix}_within_10pct_or_5bpm_ratio"] = float(within_10pct_or_5.mean())
 
-        # skuteczność względem wszystkich okien z referencją,
-        # czyli karze też przypadki, gdzie algorytm zwrócił 0
         out[f"{prefix}_effective_within_5bpm_ratio"] = float(within_5.sum() / len(ref_df))
         out[f"{prefix}_effective_within_10pct_or_5bpm_ratio"] = float(within_10pct_or_5.sum() / len(ref_df))
 
@@ -152,16 +158,12 @@ def calculate_reference_metrics(result_df):
         "ref_windows": int(len(ref_df)),
     }
 
-    # końcowy wynik użytkownika
     metrics.update(metrics_for_column("hr", "display"))
 
-    # surowy zwycięzca FFT
     metrics.update(metrics_for_column("raw_hr", "raw"))
 
-    # ostatni stabilny zaakceptowany przez FSM
     metrics.update(metrics_for_column("last_stable_hr", "stable"))
 
-    # dla kompatybilności ze starym wydrukiem
     if "display_mae" in metrics:
         metrics["valid_ref_windows"] = metrics["display_valid_windows"]
         metrics["ref_valid_ratio"] = metrics["display_valid_ratio"]
