@@ -1,3 +1,10 @@
+"""
+Peak-autocorrelation HR method with modified preprocessing (butterworth)
+
+Tests median filtering followed by a butterworth band-pass filter instead of
+the original median + high-pass/low-pass preprocessing
+"""
+
 import numpy as np
 from scipy.signal import butter, sosfilt, sosfilt_zi
 
