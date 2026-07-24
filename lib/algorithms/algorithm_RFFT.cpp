@@ -99,10 +99,10 @@ void rfft(int32_t *re, int32_t *im, int N) {
         int32_t tr = (int32_t)((temp_r1 - temp_i1 + (1LL << 30)) >> 31);
         int32_t ti = (int32_t)((temp_r2 + temp_i2 + (1LL << 30)) >> 31);
         
-        int32_t temp_re = (Er + tr + 1) >> 1;
-        int32_t temp_im = (Ei + ti + 1) >> 1;
-        int32_t temp_re_mirror = (Er - tr + 1) >> 1;
-        int32_t temp_im_mirror = (ti - Ei + 1) >> 1;
+        int32_t temp_re = Er + tr;
+        int32_t temp_im = Ei + ti;
+        int32_t temp_re_mirror = Er - tr;
+        int32_t temp_im_mirror = ti - Ei;
         
         re[k] = temp_re;
         im[k] = temp_im;
