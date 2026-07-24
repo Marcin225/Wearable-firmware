@@ -22,11 +22,11 @@ int32_t FilterAlgorithms::absValueOf(int32_t x) {
 // Butterworth bandpass Filter
 int32_t FilterAlgorithms::bandPassFilter(biquadFilter *filter, int32_t sample) {
     int64_t accum = 0;
-    int64_t accum = (int64_t)(filter->b0 * sample) + 
-                        (int64_t)(filter->b1 * filter->x1) +
-                        (int64_t)(filter->b2 * filter->x2) -
-                        (int64_t)(filter->a1 * filter->y1) -
-                        (int64_t)(filter->a2 * filter->y2);
+    accum = (int64_t)(filter->b0 * sample) + 
+            (int64_t)(filter->b1 * filter->x1) +
+            (int64_t)(filter->b2 * filter->x2) -
+            (int64_t)(filter->a1 * filter->y1) -
+            (int64_t)(filter->a2 * filter->y2);
                         
     filter->x2 = filter->x1;
     filter->x1 = sample;
