@@ -1,7 +1,9 @@
 #include "algorithm_RFFT.h"
 #include "fft_tables.h"
 
-void calculate_angles(int32_t *wr, int32_t *wi, int angle_idx) {
+rfftAlgorithm::rfftAlgorithm() {}
+
+void rfftAlgorithm::calculate_angles(int32_t *wr, int32_t *wi, int angle_idx) {
     if (angle_idx <= 512) {
         *wr = sin_table_q31[512 - angle_idx];
         *wi = -sin_table_q31[angle_idx];
@@ -11,7 +13,7 @@ void calculate_angles(int32_t *wr, int32_t *wi, int angle_idx) {
     }
 }
 
-void swap(int32_t *tab1, int32_t *tab2) {
+void rfftAlgorithm::swap(int32_t *tab1, int32_t *tab2) {
     int32_t temp = *tab2;
     *tab2 = *tab1;
     *tab1 = temp;
@@ -20,7 +22,7 @@ void swap(int32_t *tab1, int32_t *tab2) {
 // even samples 0, 2, 4 ... + zero padding move to re, 
 // odd samples 1, 3, 5 ... + zero padding move to im
 
-void rfft(int32_t *re, int32_t *im, int N) { 
+void rfftAlgorithm::rfft(int32_t *re, int32_t *im, int N) { // N = 2048 -> 1024 data + zero padding
     
     int M = N / 2;
     

@@ -3,9 +3,9 @@
 
 #include <stdint.h>
 
-class SignalProcessingAlgorithms {
+class rfftAlgorithm {
     public:
-        SignalProcessingAlgorithms(void);
+        rfftAlgorithm(void);
 
         void rfft(int32_t *re, int32_t *im, int N); // N -> 1024
     
