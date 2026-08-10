@@ -1,5 +1,4 @@
 #include "algorithm_RFFT.h"
-#include "fft_tables.h"
 
 rfftAlgorithm::rfftAlgorithm() {}
 
@@ -54,8 +53,8 @@ void rfftAlgorithm::rfft(int32_t *re, int32_t *im, int N) { // N = 2048 -> 1024 
                 int bottom_idx = i + half_step;
                 
                 int64_t temp_r1 = (int64_t)re[bottom_idx] * wr;
-                int64_t temp_r2 = (int64_t)im[bottom_idx] * wi;
-                int64_t temp_i1 = (int64_t)re[bottom_idx] * wi;
+                int64_t temp_r2 = (int64_t)re[bottom_idx] * wi;
+                int64_t temp_i1 = (int64_t)im[bottom_idx] * wi;
                 int64_t temp_i2 = (int64_t)im[bottom_idx] * wr;
                 
                 int32_t tr = (int32_t)((temp_r1 - temp_i1 + (1LL << 30)) >> 31);
@@ -81,7 +80,7 @@ void rfftAlgorithm::rfft(int32_t *re, int32_t *im, int N) { // N = 2048 -> 1024 
     re[0] = dc_value;
     im[0] = 0;
     
-    for (int k = 1; k < M; k++) {
+    for (int k = 1; k <= M / 2; k++) {
         int mirror_k = M - k;
         
         int32_t Er = (re[k] + re[mirror_k] + 1) >> 1;
