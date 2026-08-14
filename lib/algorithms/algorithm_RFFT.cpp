@@ -115,3 +115,32 @@ void rfftAlgorithm::rfft(int32_t *re, int32_t *im, int N) { // N = 2048 -> 1024 
     re[M] = nyquist_value;
     im[M] = 0;
 }
+
+int64_t rfftAlgorithm::calculate_single_bin_power(int32_t *data, int bin, int N) {
+    int M = N / 2;
+    int64_t sum_re = 0;
+    int64_t sum_im = 0;
+
+    for (int n = 0; n < M; n++) {
+        int angle_idx = (bin * n) % 2048; // (bin * n * 2048 / 2048) % 2048
+
+        int32_t wr, wi;
+
+        if (angle_idx <= 1024) {
+            calculate_angles(&wr, &wi, angle_idx);
+        }else {
+            calculate_angles(&wr, &wi, angle_idx - 1024);
+            wr = -wr;
+            wi = -wi;
+        }
+
+        sum_re += ((int64_t)data[n] * wr + (1LL << 30)) >> 31;
+        sum_im += ((int64_t)data[n] * wi + (1LL << 30)) >> 31;
+    }
+    sum_re >>= 11;
+    sum_im >>= 11;
+
+    int64_t power = (sum_re * sum_re + sum_im * sum_im + 1) >> 1;
+
+    return power;
+}

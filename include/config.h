@@ -3,6 +3,10 @@
 
 // global system configuration parameters
 
+#define BUFFER_SIZE                 1024
+#define CHUNK_SIZE                  256
+#define SPECTRUM_SIZE               1025
+
 #define I2C_SDA_PIN                 6
 #define I2C_SCL_PIN                 7
 
@@ -14,8 +18,8 @@
 #define TASK_DATA_PRIORITY          2
 #define TASK_CALC_PRIORITY          1
 
-#define NLMS_NUM_OF_TAPS            32
-#define NLMS_MU                     512
-#define NLMS_EPS                    1
+#define BONUS_Q12                   61
+#define MAIN_PENALTY_Q12            4506
+#define TH_CF_Q12                   29491
 
 #endif

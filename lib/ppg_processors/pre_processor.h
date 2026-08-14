@@ -19,7 +19,6 @@ class FilterAlgorithms {
         FilterAlgorithms(void);
         
         static int32_t medianFilter(int32_t current, int32_t *buffer);
-        static int32_t absValueOf(int32_t x);
         static int32_t bandPassFilter(biquadFilter *filter, int32_t sample);
         void initFilter(biquadFilter *filter, int32_t b0, int32_t b1, int32_t b2, int32_t a1, int32_t a2);
         void initBandPassSteadyState(biquadFilter *lp_filter, biquadFilter *hp_filter, int32_t sample);

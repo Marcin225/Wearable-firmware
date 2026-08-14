@@ -9,6 +9,7 @@ public:
     rfftAlgorithm(void);
 
     void rfft(int32_t *re, int32_t *im, int N); // N -> 1024
+    int64_t calculate_single_bin_power(int32_t *data, int bin, int N);
 
 private:
 

@@ -17,11 +17,6 @@ int32_t FilterAlgorithms::medianFilter(int32_t current, int32_t *buffer) {
 }
 
 
-int32_t FilterAlgorithms::absValueOf(int32_t x) {
-    return (x < 0) ? -x : x;
-}
-
-
 void FilterAlgorithms::initFilter(biquadFilter *filter, int32_t b0, int32_t b1, int32_t b2, int32_t a1, int32_t a2) {
     filter->b0 = b0;
     filter->b1 = b1;

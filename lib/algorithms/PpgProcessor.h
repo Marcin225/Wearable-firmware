@@ -4,11 +4,7 @@
 #define BUFFER_SIZE             200
 #define HISTORY_SIZE            8
 
-#ifdef ARDUINO
 #include <Arduino.h>
-#else
-#include <stdint.h>
-#endif
 
 extern const uint8_t SpO2Table[184];
 
