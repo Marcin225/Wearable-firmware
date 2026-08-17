@@ -7,9 +7,39 @@
 
 #include <stdint.h>
 #include <cstring>
+#include "../../include/config.h"
 #include "algorithm_RFFT.h"
-#include "../utils/fft_tables.h"
-#include "../utils/common.h"
+#include "fft_tables.h"
+#include "common.h"
+
+typedef struct {
+    int32_t sample_buffer_Ir[CHUNK_SIZE];
+    int32_t sample_buffer_Red[CHUNK_SIZE];
+    int32_t sample_buffer_AccX[CHUNK_SIZE];
+    int32_t sample_buffer_AccY[CHUNK_SIZE];
+    int32_t sample_buffer_AccZ[CHUNK_SIZE];
+
+} pulseData;
+
+typedef struct {
+    int32_t sample_buffer_Ir[BUFFER_SIZE];
+    int32_t sample_buffer_Red[BUFFER_SIZE];
+    int32_t sample_buffer_AccX[BUFFER_SIZE];
+    int32_t sample_buffer_AccY[BUFFER_SIZE];
+    int32_t sample_buffer_AccZ[BUFFER_SIZE];
+
+} estimationBuffer;
+
+typedef struct {
+    int32_t re_1[SPECTRUM_SIZE];
+    int32_t im_1[SPECTRUM_SIZE];
+
+    int32_t re_2[SPECTRUM_SIZE];
+    int32_t im_2[SPECTRUM_SIZE];
+
+    int32_t re_3[SPECTRUM_SIZE];
+    int32_t im_3[SPECTRUM_SIZE];
+} fftWorkspace;
 
 typedef struct {
     int64_t power[MAX_CANDIDATES]; // Q31 notation
@@ -36,6 +66,7 @@ typedef struct {
 } FSM;
 
 typedef struct {
+    int32_t temp_red_buffer[BUFFER_SIZE];
     int64_t power_acIr[4];
     int64_t power_acRed;
     int32_t dcIr;
@@ -68,8 +99,13 @@ public:
 
     spo2 spo2Data = {0};
 
+    estimationBuffer processBuffer= {0};
+
+    fftWorkspace sharedFftBuffer = {0};
+
 private:
     int32_t display_hr = 0;
+    int32_t normalize_power(int64_t power, int64_t max_power, int64_t min_power);
 };
 
 

@@ -81,6 +81,26 @@ int SignalProcessingAlgorithms::calculate_spo2() {
     return spo2;
 }
 
+int32_t SignalProcessingAlgorithms::normalize_power(int64_t power, int64_t max_power, int64_t min_power) {
+    uint64_t range = max_power - min_power;
+    int shift = 0;
+
+    while (range > 8589934592ULL) {
+        range >>= 1;
+        shift++;
+    }
+
+    if (range == 0) {
+        range = 1;
+    }
+
+    uint64_t shift_power = (power - min_power) >> shift;
+
+    int32_t norm_power = (int32_t)(shift_power * 2147483647ULL / range);
+
+    return norm_power;
+}
+
 
 void SignalProcessingAlgorithms::calculate_hr_candidates(int32_t *re, int32_t *im) {
 
@@ -90,7 +110,7 @@ void SignalProcessingAlgorithms::calculate_hr_candidates(int32_t *re, int32_t *i
     int64_t mean_power = 0;
     int candidate_idx = 0;
 
-    __int128_t accum = 0;
+    uint64_t accum = 0;
     for (int i = 14; i <= 68; i++) {
         accum += (int64_t)re[i] * re[i] + (int64_t)im[i] * im[i];
     }
@@ -139,7 +159,7 @@ void SignalProcessingAlgorithms::calculate_hr_candidates(int32_t *re, int32_t *i
     if (max_power == min_power)
         return;
 
-    int32_t mean_power_norm = (int64_t)((__int128_t)(mean_power - min_power) * 2147483647 / (max_power - min_power));
+    int32_t mean_power_norm = normalize_power(mean_power, max_power, min_power);
 
     if (mean_power_norm == 0)
         mean_power_norm = 1;
@@ -147,7 +167,8 @@ void SignalProcessingAlgorithms::calculate_hr_candidates(int32_t *re, int32_t *i
     for (int i = 0; i < MAX_CANDIDATES ; i++) { // number of hr candidates
         if (HrTopCandidates.frequency[i] > 0) {
             spo2Data.power_acIr[i] = HrTopCandidates.power[i];
-            HrTopCandidates.power[i] = (int64_t)((__int128_t)(HrTopCandidates.power[i] - min_power) * 2147483647 / (max_power - min_power));
+            HrTopCandidates.power[i] = normalize_power(HrTopCandidates.power[i], max_power, min_power);
+            // HrTopCandidates.power[i] = (int64_t)((int128_t)(HrTopCandidates.power[i] - min_power) * 2147483647 / (max_power - min_power));
             HrTopCandidates.th_cf[i] = HrTopCandidates.power[i] * 4096 / mean_power_norm;
         }
     }
@@ -191,7 +212,8 @@ void SignalProcessingAlgorithms::calculate_motion_frequencies(int32_t *re_1, int
 
 
     for (int i = 0; i < 55; i++) {
-        motionHrBand.power[i] = (int64_t)((__int128_t)(sum_power[i] - min_power) * 2147483647 / (max_power - min_power));
+        motionHrBand.power[i] = normalize_power(sum_power[i], max_power, min_power);
+        // motionHrBand.power[i] = (int64_t)((int128_t)(sum_power[i] - min_power) * 2147483647 / (max_power - min_power));
         motionHrBand.frequency[i] = (i + 14) * 100  * 16384 / 2048;
     }   
 }

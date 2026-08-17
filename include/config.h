@@ -6,6 +6,7 @@
 #define BUFFER_SIZE                 1024
 #define CHUNK_SIZE                  256
 #define SPECTRUM_SIZE               1025
+#define FFT_SIZE                    2048
 
 #define I2C_SDA_PIN                 6
 #define I2C_SCL_PIN                 7

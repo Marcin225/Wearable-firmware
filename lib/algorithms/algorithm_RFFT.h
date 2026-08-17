@@ -2,7 +2,7 @@
 #define ALGORITHM_RFFT_H
 
 #include <stdint.h>
-#include "../utils/fft_tables.h"
+#include "fft_tables.h"
 
 class rfftAlgorithm {
 public:
