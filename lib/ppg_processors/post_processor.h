@@ -13,6 +13,8 @@
 #include "common.h"
 
 typedef struct {
+    uint32_t sessionId = 0;
+
     int32_t sample_buffer_Ir[CHUNK_SIZE];
     int32_t sample_buffer_Red[CHUNK_SIZE];
     int32_t sample_buffer_AccX[CHUNK_SIZE];
@@ -76,6 +78,11 @@ typedef struct {
     int64_t signal_sum_Red[4];
 } spo2;
 
+struct VitalResult {
+    int32_t heartRate = 0;
+    int32_t spo2 = 0;
+};
+
 class SignalProcessingAlgorithms {
 public:
     SignalProcessingAlgorithms(void);
@@ -90,7 +97,10 @@ public:
 
     int calculate_hr(int32_t bonus_weight, int32_t main_penalty_weight, int32_t th_cf);
     int calculate_spo2();
+    VitalResult calculateVitals(int32_t bonusQ12, int32_t mainPenaltyQ12, int32_t thCfQ12);
     int32_t smooth_hr(int32_t hr);
+
+    void reset_session();
 
     hrCandidatesNorm HrTopCandidates = {0};
     motionNorm motionHrBand = {0};

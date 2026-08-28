@@ -23,4 +23,6 @@
 #define MAIN_PENALTY_Q12            4506
 #define TH_CF_Q12                   29491
 
+#define MOTION_THRESHOLD            2500
+
 #endif

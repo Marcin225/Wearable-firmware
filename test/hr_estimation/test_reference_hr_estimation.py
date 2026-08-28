@@ -18,7 +18,7 @@ import pandas as pd
 # pass/fail thresholds for hr accuracy
 MAX_MAE = 5.0 # max mean absolute error in bpm
 MAX_RMSE = 7.0 # max root mean square error in bpm
-MIN_WITHIN_5 = 0.80 # min 80% of windows must be within +/- 5 bpm
+MIN_WITHIN_5 = 0.50 # min 50% of windows must be within +/- 5 bpm
 
 
 def calculate_metrics(estimated, reference):

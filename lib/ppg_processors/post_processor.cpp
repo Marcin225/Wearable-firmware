@@ -2,6 +2,48 @@
 
 SignalProcessingAlgorithms::SignalProcessingAlgorithms() {}
 
+void SignalProcessingAlgorithms::reset_session() {
+    HrTopCandidates = {};
+    motionHrBand = {};
+    StateMachine = {};
+    // spo2Data = {};
+
+    spo2Data.power_acIr[0] = 0;
+    spo2Data.power_acIr[1] = 0;
+    spo2Data.power_acIr[2] = 0;
+    spo2Data.power_acIr[3] = 0;
+    spo2Data.power_acRed = 0;
+    spo2Data.bin = 0;
+    display_hr = 0;
+}
+
+VitalResult SignalProcessingAlgorithms::calculateVitals(int32_t bonusQ12, int32_t mainPenaltyQ12, int32_t thCfQ12) {
+    VitalResult result;
+
+    process_rfft(processBuffer.sample_buffer_Ir, sharedFftBuffer.re_1, sharedFftBuffer.im_1, FFT_SIZE);
+    calculate_hr_candidates(sharedFftBuffer.re_1, sharedFftBuffer.im_1);
+
+    process_rfft(processBuffer.sample_buffer_AccX, sharedFftBuffer.re_1, sharedFftBuffer.im_1, FFT_SIZE);
+    process_rfft(processBuffer.sample_buffer_AccY, sharedFftBuffer.re_2, sharedFftBuffer.im_2, FFT_SIZE);
+    process_rfft(processBuffer.sample_buffer_AccZ, sharedFftBuffer.re_3, sharedFftBuffer.im_3, FFT_SIZE);
+
+    calculate_motion_frequencies(sharedFftBuffer.re_1, sharedFftBuffer.im_1,
+        sharedFftBuffer.re_2, sharedFftBuffer.im_2,
+        sharedFftBuffer.re_3, sharedFftBuffer.im_3);
+
+    result.heartRate = calculate_hr(bonusQ12, mainPenaltyQ12, thCfQ12);
+
+    process_single_bin_fft(processBuffer.sample_buffer_Red, sharedFftBuffer.re_1, spo2Data.bin, FFT_SIZE);
+
+    if (result.heartRate > 0 && StateMachine.state == 0) {
+        result.spo2 = calculate_spo2();
+    }else {
+        result.spo2 = 0;
+    }
+
+    return result;
+}
+
 void SignalProcessingAlgorithms::process_rfft(int32_t *signal, int32_t *re, int32_t *im, int N) {
 
     int M = N / 2;

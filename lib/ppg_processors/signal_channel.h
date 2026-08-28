@@ -23,8 +23,11 @@ enum class BufferWarmupStage {
     READY = 4
 };
 
-extern bool buffer_ready;
+enum class DeviceState {
+    CHECK = 0,
+    WORK = 1
+};
 
-extern BufferWarmupStage fill_stage;
+extern DeviceState system_mode;
 
 #endif

@@ -65,7 +65,7 @@ bool MAX30102::begin() {
 }
 
 void MAX30102::setup() {
-    writeRegister(MAX30102_MODE_CONFIGURATION, 0x03); // 0x03 - multi diode RED and IR
+    writeRegister(MAX30102_MODE_CONFIGURATION, 0x80); // enter shutdown mode to avoid data race conditions
 
                                                       // Combined value 0x27 consists of:
     writeRegister(MAX30102_SPO2_CONFIGURATION, 0x27); // ADC Range: 4096nA 
@@ -75,8 +75,15 @@ void MAX30102::setup() {
     writeRegister(MAX30102_LED1_PA, 0x1F); // LED Red Current 0x1F - 6.2 mA 
     writeRegister(MAX30102_LED2_PA, 0x1F); // LED IR Current 0x1F - 6.2 mA
 
-    clearFIFO();
+    writeRegister(MAX30102_INTERRUPT_ENABLE_1, 0x80); // Interrupt Enable 0x80 - A_FULL: FIFO Almost Full Flag
+
     FifoConfiguration();
+
+    clearFIFO();
+
+    clearISRFlag(); // clear old ISR flag
+
+    writeRegister(MAX30102_MODE_CONFIGURATION, 0x03); // Wake up sensor and start multi-LED mode (Red + IR)
 
 }
 
@@ -89,25 +96,66 @@ void MAX30102::clearFIFO() {
 }
 
 void MAX30102::FifoConfiguration() {
-    writeRegister(MAX30102_FIFO_CONFIGURATION, 0x10); // 0x10 FIFO rollvower ON
+    writeRegister(MAX30102_FIFO_CONFIGURATION, 0x14); // 0x10 FIFO rollvower ON 
+                                                      // 0x4 FIFO Almost Full Value (28 unread samples)
 }
+
+void MAX30102::clearISRFlag() {
+    readRegister(MAX30102_INTERRUPT_STATUS_1);
+}
+
+
+
+int MAX30102::getWritePointer() {
+    return readRegister(MAX30102_FIFO_WRITE_POINTER);
+}
+
+int MAX30102::getReadPointer() {
+    return readRegister(MAX30102_FIFO_READ_POINTER);
+}
+
+int MAX30102::getOverflowCounter() {
+    return readRegister(MAX30102_FIFO_OVERFLOW_COUNTER);
+}
+
+int MAX30102::getISRStatus1() {
+    return readRegister(MAX30102_INTERRUPT_STATUS_1);
+}
+
+void MAX30102::debugConfig() {
+    Serial.print("INT_EN1: 0x");
+    Serial.println(readRegister(MAX30102_INTERRUPT_ENABLE_1), HEX);
+
+    Serial.print("FIFO_CFG: 0x");
+    Serial.println(readRegister(MAX30102_FIFO_CONFIGURATION), HEX);
+}
+
+
+
+
 
 void MAX30102::shutDown() {
     writeRegister(MAX30102_MODE_CONFIGURATION, 0x80);
 }
 
 void MAX30102::wakeUp() {
-    writeRegister(MAX30102_MODE_CONFIGURATION, 0x00);
+    writeRegister(MAX30102_MODE_CONFIGURATION, 0x03); // wakes up and start Red + Ir mode
 }
 
 // transfer raw Red and IR samples from the hardware FIFO to the local ring buffer
 void MAX30102::readNewData() {
     uint8_t read_pointer = readRegister(MAX30102_FIFO_READ_POINTER);
     uint8_t write_pointer = readRegister(MAX30102_FIFO_WRITE_POINTER);
+    uint8_t overflow = readRegister(MAX30102_FIFO_OVERFLOW_COUNTER);
 
     if (read_pointer == write_pointer) {
+        if (overflow) {
+            Serial.println("FIFO overflow occurred");
+        }
         return;
     }
+
+    clearISRFlag();
 
     int number_of_samples = 0;
     number_of_samples = write_pointer - read_pointer;
@@ -139,7 +187,6 @@ void MAX30102::readNewData() {
             }
 
             uint8_t buffer[6];
-            int i = 0;
 
             for (int i=0; i<6; i++) 
                 buffer[i] = Wire.read();

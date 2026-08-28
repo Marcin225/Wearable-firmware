@@ -1,7 +1,6 @@
 #include "signal_channel.h"
 
-bool buffer_ready = false;
-BufferWarmupStage fill_stage = BufferWarmupStage::EMPTY;
+DeviceState system_mode = DeviceState::WORK;
 
 void initChannel(FilterAlgorithms& filter, ChannelFilter& channel) {
     filter.initFilter(&channel.lowPass, 11803882, 23607764, 11803882, -1830343161, 806667139);

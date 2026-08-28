@@ -33,6 +33,13 @@ struct MaxSample {
     uint32_t Ir;
 };
 
+struct SensorData {
+            uint32_t storageRed[STORAGE_SIZE];
+            uint32_t storageIr[STORAGE_SIZE];
+            uint16_t head = 0;
+            uint16_t tail = 0;
+        };
+
 
 class MAX30102 {
     public:
@@ -45,9 +52,21 @@ class MAX30102 {
         void shutDown();
         void wakeUp();
         void FifoConfiguration();
+        void clearISRFlag();
+
+        int getWritePointer();
+        int getReadPointer();
+        int getOverflowCounter();
+        int getISRStatus1();
+        void debugConfig();
+
 
         uint16_t available();
         MaxSample readSample();
+
+        
+
+        SensorData DiodeData;
 
     
     private:
@@ -56,14 +75,14 @@ class MAX30102 {
         void writeRegister(uint8_t reg, uint8_t value);
         int readRegister(uint8_t reg);
 
-        struct SensorData {
-            uint32_t storageRed[STORAGE_SIZE];
-            uint32_t storageIr[STORAGE_SIZE];
-            uint16_t head = 0;
-            uint16_t tail = 0;
-        };
+        // struct SensorData {
+        //     uint32_t storageRed[STORAGE_SIZE];
+        //     uint32_t storageIr[STORAGE_SIZE];
+        //     uint16_t head = 0;
+        //     uint16_t tail = 0;
+        // };
 
-        SensorData DiodeData;
+        // SensorData DiodeData;
 
 };
 
