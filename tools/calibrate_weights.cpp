@@ -45,8 +45,8 @@
 #define FFT_SIZE 2048
 #define SPECTRUM_SIZE 1025
 
-constexpr double TH_CF = 7.1;
-constexpr int16_t TH_CF_Q12 = 29082;
+constexpr double TH_CF = 7.2;
+constexpr int16_t TH_CF_Q12 = 29491;
 
 struct CsvRow {
     double timestamp;

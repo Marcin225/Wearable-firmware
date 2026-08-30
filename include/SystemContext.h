@@ -6,27 +6,35 @@
 #include <Arduino.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
+#include <atomic>
 
 #include "max30102_driver.h"
 #include "mpu6050_driver.h"
-#include "PpgProcessor.h"
-#include "algorithm_NLMS.h"
+
+#include "pre_processor.h"
+#include "post_processor.h"
+#include "algorithm_RFFT.h"
+#include "common.h"
+#include "signal_channel.h"
+
 #include "BLE.h"
 #include "config.h"
 
 struct SystemContext {
     MAX30102 maxSensor;
     MPU6050 mpuSensor;
-    FilterAlgorithms filters;
-    SignalProcessingAlgorithms processor;
+    FilterAlgorithms filter;
+    SignalProcessingAlgorithms algorithm;
 
     BleManager BLE;
 
-    PulseData pulseBufferA;
-    PulseData pulseBufferB;
+    pulseData pulseBufferA;
+    pulseData pulseBufferB;
 
     QueueHandle_t emptyQueue = NULL;
     QueueHandle_t fullQueue = NULL;
+
+    std::atomic<uint32_t> measurementSessionId{0};
 };
 
 #endif

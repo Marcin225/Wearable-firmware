@@ -2,6 +2,48 @@
 
 SignalProcessingAlgorithms::SignalProcessingAlgorithms() {}
 
+void SignalProcessingAlgorithms::reset_session() {
+    HrTopCandidates = {};
+    motionHrBand = {};
+    StateMachine = {};
+    // spo2Data = {};
+
+    spo2Data.power_acIr[0] = 0;
+    spo2Data.power_acIr[1] = 0;
+    spo2Data.power_acIr[2] = 0;
+    spo2Data.power_acIr[3] = 0;
+    spo2Data.power_acRed = 0;
+    spo2Data.bin = 0;
+    display_hr = 0;
+}
+
+VitalResult SignalProcessingAlgorithms::calculateVitals(int32_t bonusQ12, int32_t mainPenaltyQ12, int32_t thCfQ12) {
+    VitalResult result;
+
+    process_rfft(processBuffer.sample_buffer_Ir, sharedFftBuffer.re_1, sharedFftBuffer.im_1, FFT_SIZE);
+    calculate_hr_candidates(sharedFftBuffer.re_1, sharedFftBuffer.im_1);
+
+    process_rfft(processBuffer.sample_buffer_AccX, sharedFftBuffer.re_1, sharedFftBuffer.im_1, FFT_SIZE);
+    process_rfft(processBuffer.sample_buffer_AccY, sharedFftBuffer.re_2, sharedFftBuffer.im_2, FFT_SIZE);
+    process_rfft(processBuffer.sample_buffer_AccZ, sharedFftBuffer.re_3, sharedFftBuffer.im_3, FFT_SIZE);
+
+    calculate_motion_frequencies(sharedFftBuffer.re_1, sharedFftBuffer.im_1,
+        sharedFftBuffer.re_2, sharedFftBuffer.im_2,
+        sharedFftBuffer.re_3, sharedFftBuffer.im_3);
+
+    result.heartRate = calculate_hr(bonusQ12, mainPenaltyQ12, thCfQ12);
+
+    process_single_bin_fft(processBuffer.sample_buffer_Red, sharedFftBuffer.re_1, spo2Data.bin, FFT_SIZE);
+
+    if (result.heartRate > 0 && StateMachine.state == 0) {
+        result.spo2 = calculate_spo2();
+    }else {
+        result.spo2 = 0;
+    }
+
+    return result;
+}
+
 void SignalProcessingAlgorithms::process_rfft(int32_t *signal, int32_t *re, int32_t *im, int N) {
 
     int M = N / 2;
@@ -37,6 +79,71 @@ void SignalProcessingAlgorithms::process_rfft(int32_t *signal, int32_t *re, int3
 }
 
 
+void SignalProcessingAlgorithms::process_single_bin_fft(int32_t *signal, int32_t *temp_buffer, int bin, int N) {
+    int M = N / 2;
+    rfftAlgorithm single_bin_fft;
+
+    // calculate signal mean
+    int64_t sum = 0;
+    for (int i = 0; i < M; i++) {
+        sum += signal[i];
+    }
+    int32_t signal_mean = sum / M;
+
+    for (int i = 0; i < M; i++) {
+        int64_t dcOff = ((int64_t)signal[i] - signal_mean) << 15;
+
+        temp_buffer[i] = (int32_t)((dcOff * hann_table_q31[i] + (1LL << 30)) >> 31); // (signal - mean) * hann_window
+    }
+
+    int64_t power = single_bin_fft.calculate_single_bin_power(temp_buffer, bin, N);
+
+    spo2Data.power_acRed = power;
+}
+
+
+int SignalProcessingAlgorithms::calculate_spo2() {
+    uint32_t AcIr = isqrt(spo2Data.power_acIr[0]);
+    uint32_t AcRed = isqrt(spo2Data.power_acRed);
+
+    int64_t num = (int64_t)AcRed * spo2Data.dcIr * 100;
+    int64_t den = (int64_t)AcIr * spo2Data.dcRed;
+
+    if (den == 0) {
+        return 0;
+    }
+
+    int32_t ratio = num / den;
+    if (ratio < 20 || ratio > 150) {
+        return 0;
+    }
+
+    int spo2 = spo2_table[ratio];
+
+    return spo2;
+}
+
+int32_t SignalProcessingAlgorithms::normalize_power(int64_t power, int64_t max_power, int64_t min_power) {
+    uint64_t range = max_power - min_power;
+    int shift = 0;
+
+    while (range > 8589934592ULL) {
+        range >>= 1;
+        shift++;
+    }
+
+    if (range == 0) {
+        range = 1;
+    }
+
+    uint64_t shift_power = (power - min_power) >> shift;
+
+    int32_t norm_power = (int32_t)(shift_power * 2147483647ULL / range);
+
+    return norm_power;
+}
+
+
 void SignalProcessingAlgorithms::calculate_hr_candidates(int32_t *re, int32_t *im) {
 
     // hr band 0.67 hz - 3.3 hz ->  ≈ 40 - 200 bpm | for fft frequency resolution = 100 hz / 2048 
@@ -45,7 +152,7 @@ void SignalProcessingAlgorithms::calculate_hr_candidates(int32_t *re, int32_t *i
     int64_t mean_power = 0;
     int candidate_idx = 0;
 
-    __int128_t accum = 0;
+    uint64_t accum = 0;
     for (int i = 14; i <= 68; i++) {
         accum += (int64_t)re[i] * re[i] + (int64_t)im[i] * im[i];
     }
@@ -94,14 +201,16 @@ void SignalProcessingAlgorithms::calculate_hr_candidates(int32_t *re, int32_t *i
     if (max_power == min_power)
         return;
 
-    int32_t mean_power_norm = (int64_t)((__int128_t)(mean_power - min_power) * 2147483647 / (max_power - min_power));
+    int32_t mean_power_norm = normalize_power(mean_power, max_power, min_power);
 
     if (mean_power_norm == 0)
         mean_power_norm = 1;
 
     for (int i = 0; i < MAX_CANDIDATES ; i++) { // number of hr candidates
         if (HrTopCandidates.frequency[i] > 0) {
-            HrTopCandidates.power[i] = (int64_t)((__int128_t)(HrTopCandidates.power[i] - min_power) * 2147483647 / (max_power - min_power));
+            spo2Data.power_acIr[i] = HrTopCandidates.power[i];
+            HrTopCandidates.power[i] = normalize_power(HrTopCandidates.power[i], max_power, min_power);
+            // HrTopCandidates.power[i] = (int64_t)((int128_t)(HrTopCandidates.power[i] - min_power) * 2147483647 / (max_power - min_power));
             HrTopCandidates.th_cf[i] = HrTopCandidates.power[i] * 4096 / mean_power_norm;
         }
     }
@@ -145,7 +254,8 @@ void SignalProcessingAlgorithms::calculate_motion_frequencies(int32_t *re_1, int
 
 
     for (int i = 0; i < 55; i++) {
-        motionHrBand.power[i] = (int64_t)((__int128_t)(sum_power[i] - min_power) * 2147483647 / (max_power - min_power));
+        motionHrBand.power[i] = normalize_power(sum_power[i], max_power, min_power);
+        // motionHrBand.power[i] = (int64_t)((int128_t)(sum_power[i] - min_power) * 2147483647 / (max_power - min_power));
         motionHrBand.frequency[i] = (i + 14) * 100  * 16384 / 2048;
     }   
 }
@@ -159,14 +269,38 @@ int32_t SignalProcessingAlgorithms::smooth_hr(int32_t hr) {
     if (display_hr <= 0) {
         display_hr = hr;
     }else {
-        display_hr = (((display_hr << 8) + HR_SMOOTH_ALPHA * (hr - display_hr) + (1LL << 7)) >> 8);
+        display_hr += (HR_SMOOTH_ALPHA * (hr - display_hr) + 128) >> 8;
     }
 
     return display_hr;
 }
 
 
-int SignalProcessingAlgorithms::calculate_hr(int32_t bonus_weight, int32_t penalty_weight, int32_t th_cf) {
+int64_t SignalProcessingAlgorithms::get_max_motion_penalty_bin(int bin) {
+    int64_t max_motion = 0;
+    int imu_idx = bin - 14;
+
+    int start = imu_idx - 2;
+    int end = imu_idx + 2;
+
+    if (start < 0) {
+        start = 0;
+    }
+    if (end > 54) {
+        end = 54;
+    }
+
+    for (int i = start; i <= end; i++) {
+        if (motionHrBand.power[i] > max_motion) {
+            max_motion = motionHrBand.power[i];
+        }
+    }
+
+    return max_motion;
+}
+
+
+int SignalProcessingAlgorithms::calculate_hr(int32_t bonus_weight, int32_t main_penalty_weight, int32_t th_cf) {
     int winner_idx = -1;
     int64_t max_score = -9223372036854775807;
 
@@ -177,25 +311,14 @@ int SignalProcessingAlgorithms::calculate_hr(int32_t bonus_weight, int32_t penal
 
         int candidate_hr = (HrTopCandidates.frequency[c] * 60 + (1LL << 13)) >> 14;
 
-        int imu_idx = HrTopCandidates.index[c] - 14;
-        int64_t imu_val = 0;
-        int32_t bonus = 0;
+        int imu_idx = HrTopCandidates.index[c];
 
-        int start = imu_idx - 2;
-        int end = imu_idx + 2;
+        int64_t bonus = 0;
+        int64_t max_motion = 0;
 
-        if (start < 0) {
-            start = 0;
-        }
-        if (end > 54) {
-            end = 54;
-        }
+        max_motion = get_max_motion_penalty_bin(imu_idx);
 
-        for (int i = start; i <= end; i++) {
-            if (motionHrBand.power[i] > imu_val) {
-                imu_val = motionHrBand.power[i];
-            }
-        }
+        int64_t main_bin_penalty = (max_motion * main_penalty_weight + (1LL << 11)) >> 12;
 
         if (StateMachine.last_stable_hr > 0) {
             int diff_abs = absValueOf(candidate_hr - StateMachine.last_stable_hr);
@@ -206,9 +329,7 @@ int SignalProcessingAlgorithms::calculate_hr(int32_t bonus_weight, int32_t penal
             }
         }
 
-        int64_t penalty = (imu_val * penalty_weight + (1LL << 11)) >> 12;
-
-        HrTopCandidates.score[c] = (HrTopCandidates.power[c] * 4096 - (int64_t)imu_val * penalty_weight + (int64_t)bonus * 4096 + (1LL << 11)) >> 12;
+        HrTopCandidates.score[c] = HrTopCandidates.power[c] - main_bin_penalty + bonus;
 
         if (HrTopCandidates.score[c] > max_score) {
             max_score = HrTopCandidates.score[c];
@@ -219,6 +340,9 @@ int SignalProcessingAlgorithms::calculate_hr(int32_t bonus_weight, int32_t penal
     if (winner_idx < 0) {
         return 0;
     }
+
+    spo2Data.power_acIr[0] = spo2Data.power_acIr[winner_idx];
+    spo2Data.bin = HrTopCandidates.index[winner_idx];
 
     int32_t th_cf_winner = HrTopCandidates.th_cf[winner_idx];
     int hr_winner = (HrTopCandidates.frequency[winner_idx] * 60 + (1LL << 13)) >> 14;
@@ -234,7 +358,7 @@ int SignalProcessingAlgorithms::calculate_hr(int32_t bonus_weight, int32_t penal
                 StateMachine.last_stable_hr = hr_winner;
                 StateMachine.second_last_hr = StateMachine.last_hr;
                 StateMachine.last_hr = hr_winner;
-                
+
                 return StateMachine.last_stable_hr;
             } else {
                 StateMachine.state = 1; // ALERT
@@ -255,7 +379,7 @@ int SignalProcessingAlgorithms::calculate_hr(int32_t bonus_weight, int32_t penal
                 return StateMachine.last_stable_hr;
             } else {
                 StateMachine.alertCounter++;
-                if (StateMachine.alertCounter >= 5) {
+                if (StateMachine.alertCounter >= 3) {
                     StateMachine.state = 2; // UNCERTAIN
                     StateMachine.alertCounter = 0;
 
@@ -268,7 +392,7 @@ int SignalProcessingAlgorithms::calculate_hr(int32_t bonus_weight, int32_t penal
         case 2: // UNCERTAIN
             if (is_singal_sharp) {
                 StateMachine.good_windows++;
-                if (StateMachine.good_windows >= 3) {
+                if (StateMachine.good_windows >= 2) {
                     StateMachine.state = 1;
                     StateMachine.good_windows = 0;
 
@@ -284,7 +408,7 @@ int SignalProcessingAlgorithms::calculate_hr(int32_t bonus_weight, int32_t penal
         case 3: // RECOVERY
             if (is_singal_sharp) {
                 StateMachine.recovery_counter++;
-                if (StateMachine.recovery_counter >= 4) {
+                if (StateMachine.recovery_counter >= 3) {
                     if (recovery_jump <= MAX_HR_DIFF && second_recovery_jump <= MAX_HR_DIFF) {
                         StateMachine.state = 0; // STABLE
                         StateMachine.last_stable_hr = hr_winner;
@@ -304,7 +428,7 @@ int SignalProcessingAlgorithms::calculate_hr(int32_t bonus_weight, int32_t penal
                 StateMachine.state = 1;
                 StateMachine.recovery_counter = 0;
 
-                return 0;
+                return StateMachine.last_stable_hr;
             }
     }
 }
