@@ -1,6 +1,6 @@
 """
 Parameter sweep script for tuning FFT_FSM:
- - CF threshold: minimum spectral peak quality required to accept an HR estimate
+ - CF threshold: controls how strongly an HR peak must stand out from the spectrum
 
 Tests multiple TH_CF values, compares FFT_FSM heart-rate estimates with the
 reference HR column, and prints accuracy metrics for each threshold

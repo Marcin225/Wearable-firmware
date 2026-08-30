@@ -1,6 +1,8 @@
 #include "sensor_processing.h"
 #include "common.h"
 
+
+// calculate motion as the sum of peak-to-peak acceleration across all three axes
 int32_t calculateMotion(const MpuSample *mpuBatch, int mpuCount) {
 
     int32_t max_motion_X = INT32_MIN, max_motion_Y = INT32_MIN, max_motion_Z = INT32_MIN;
@@ -25,6 +27,7 @@ int32_t calculateMotion(const MpuSample *mpuBatch, int mpuCount) {
     return motion;
 }
 
+// linearly interpolate MPU6050 samples to match the MAX30102 sample count
 MpuSample interpolateMpu(const MpuSample *mpuBatch, int mpuCount, int sampleNumber, int maxCount) {
     MpuSample output = {0};
 
@@ -43,14 +46,14 @@ MpuSample interpolateMpu(const MpuSample *mpuBatch, int mpuCount, int sampleNumb
     int posMpuSample = sampleNumber * (mpuCount - 1);
     int length = maxCount - 1;
 
-    int Idx = posMpuSample / length;
+    int idx = posMpuSample / length;
 
-    int num = posMpuSample % length; // how far is mpu sample beetwen max (sensor) samples 
-    int den = length; // number of samples
+    int num = posMpuSample % length;
+    int den = length;
 
-    output.accX = mpuBatch[Idx].accX + ((int64_t)(mpuBatch[Idx + 1].accX - mpuBatch[Idx].accX) * num) / den;
-    output.accY = mpuBatch[Idx].accY + ((int64_t)(mpuBatch[Idx + 1].accY - mpuBatch[Idx].accY) * num) / den;
-    output.accZ = mpuBatch[Idx].accZ + ((int64_t)(mpuBatch[Idx + 1].accZ - mpuBatch[Idx].accZ) * num) / den;
+    output.accX = mpuBatch[idx].accX + ((int64_t)(mpuBatch[idx + 1].accX - mpuBatch[idx].accX) * num) / den;
+    output.accY = mpuBatch[idx].accY + ((int64_t)(mpuBatch[idx + 1].accY - mpuBatch[idx].accY) * num) / den;
+    output.accZ = mpuBatch[idx].accZ + ((int64_t)(mpuBatch[idx + 1].accZ - mpuBatch[idx].accZ) * num) / den;
 
     return output;
 }

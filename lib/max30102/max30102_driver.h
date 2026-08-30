@@ -33,14 +33,6 @@ struct MaxSample {
     uint32_t Ir;
 };
 
-struct SensorData {
-            uint32_t storageRed[STORAGE_SIZE];
-            uint32_t storageIr[STORAGE_SIZE];
-            uint16_t head = 0;
-            uint16_t tail = 0;
-        };
-
-
 class MAX30102 {
     public:
         MAX30102(void);
@@ -64,10 +56,6 @@ class MAX30102 {
         uint16_t available();
         MaxSample readSample();
 
-        
-
-        SensorData DiodeData;
-
     
     private:
         uint8_t _i2caddr;
@@ -75,14 +63,14 @@ class MAX30102 {
         void writeRegister(uint8_t reg, uint8_t value);
         int readRegister(uint8_t reg);
 
-        // struct SensorData {
-        //     uint32_t storageRed[STORAGE_SIZE];
-        //     uint32_t storageIr[STORAGE_SIZE];
-        //     uint16_t head = 0;
-        //     uint16_t tail = 0;
-        // };
+        struct SensorData {
+            uint32_t storageRed[STORAGE_SIZE];
+            uint32_t storageIr[STORAGE_SIZE];
+            uint16_t head = 0;
+            uint16_t tail = 0;
+        };
 
-        // SensorData DiodeData;
+        SensorData DiodeData;
 
 };
 

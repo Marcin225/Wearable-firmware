@@ -1,7 +1,9 @@
 #ifndef TASKS_H
 #define TASKS_H
 
-#include "SystemContext.h"
+#include <Arduino.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
 
 extern TaskHandle_t CollectAndFilterTaskHandle;
 

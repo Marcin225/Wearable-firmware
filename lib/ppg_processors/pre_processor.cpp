@@ -2,7 +2,7 @@
 
 FilterAlgorithms::FilterAlgorithms(void) { }
 
-
+// three-sample median filter used to suppress short impulse spikes
 int32_t FilterAlgorithms::medianFilter(int32_t current, int32_t *buffer) {
     int32_t v[3] = {current, buffer[0], buffer[1]};
 
@@ -26,7 +26,7 @@ void FilterAlgorithms::initFilter(biquadFilter *filter, int32_t b0, int32_t b1, 
     filter->a2 = a2;
 }
 
-
+// initialize the filter state from the first valid sample to avoid startup transients
 void FilterAlgorithms::initBandPassSteadyState(biquadFilter *lp_filter, biquadFilter *hp_filter, int32_t sample) {
     int64_t num = (int64_t)lp_filter->b0 + lp_filter->b1 + lp_filter->b2;
     int64_t den = (1LL << 30) + lp_filter->a1 + lp_filter->a2;
@@ -45,7 +45,7 @@ void FilterAlgorithms::initBandPassSteadyState(biquadFilter *lp_filter, biquadFi
 }
 
 
-// Butterworth bandpass Filter
+// Process one sample through a biquad filter using Q2.30 coefficients
 int32_t FilterAlgorithms::bandPassFilter(biquadFilter *filter, int32_t sample) {
     int64_t accum = 0;
     accum = (int64_t)filter->b0 * sample +
@@ -58,6 +58,7 @@ int32_t FilterAlgorithms::bandPassFilter(biquadFilter *filter, int32_t sample) {
     filter->x1 = sample;
     filter->y2 = filter->y1;
 
+    // return to the signal scale
     int32_t output = (accum + (1LL << 29)) >> 30;
 
     filter->y1 = output;

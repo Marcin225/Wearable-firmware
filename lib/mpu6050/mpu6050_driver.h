@@ -2,8 +2,8 @@
 
 // NOTE:
 // This "MPU6050" module returns WHO_AM_I = 0x98 and appears to be
-// an ICM-20689 or ICM-20689-compatible clone.
-// Wake-on-Motion is therefore configured using ICM-20689 registers.
+// an ICM-20689 or ICM-20689-compatible clone
+// Wake-on-Motion is therefore configured using ICM-20689 registers
 
 #ifndef MPU6050_DRIVER_H
 #define MPU6050_DRIVER_H

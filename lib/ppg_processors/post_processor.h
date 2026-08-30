@@ -1,122 +1,49 @@
 #ifndef PPG_PROCESSOR_H
 #define PPG_PROCESSOR_H
 
-#define MAX_CANDIDATES          4
-#define MAX_HR_DIFF             6
-#define HR_SMOOTH_ALPHA         71 //Q8
+#define MAX_HR_DIFF 6 // maximum allowed HR difference between consecutive chunks
+#define HR_SMOOTH_ALPHA 71 // HR smoothing coefficient in Q8 fixed-point format
 
 #include <stdint.h>
-#include <cstring>
+
 #include "../../include/config.h"
-#include "algorithm_RFFT.h"
-#include "fft_tables.h"
-#include "common.h"
-
-typedef struct {
-    uint32_t sessionId = 0;
-
-    int32_t sample_buffer_Ir[CHUNK_SIZE];
-    int32_t sample_buffer_Red[CHUNK_SIZE];
-    int32_t sample_buffer_AccX[CHUNK_SIZE];
-    int32_t sample_buffer_AccY[CHUNK_SIZE];
-    int32_t sample_buffer_AccZ[CHUNK_SIZE];
-
-} pulseData;
-
-typedef struct {
-    int32_t sample_buffer_Ir[BUFFER_SIZE];
-    int32_t sample_buffer_Red[BUFFER_SIZE];
-    int32_t sample_buffer_AccX[BUFFER_SIZE];
-    int32_t sample_buffer_AccY[BUFFER_SIZE];
-    int32_t sample_buffer_AccZ[BUFFER_SIZE];
-
-} estimationBuffer;
-
-typedef struct {
-    int32_t re_1[SPECTRUM_SIZE];
-    int32_t im_1[SPECTRUM_SIZE];
-
-    int32_t re_2[SPECTRUM_SIZE];
-    int32_t im_2[SPECTRUM_SIZE];
-
-    int32_t re_3[SPECTRUM_SIZE];
-    int32_t im_3[SPECTRUM_SIZE];
-} fftWorkspace;
-
-typedef struct {
-    int64_t power[MAX_CANDIDATES]; // Q31 notation
-    int32_t th_cf[MAX_CANDIDATES]; // Q31 notation
-    uint16_t frequency[MAX_CANDIDATES]; // Q 2.14 notation
-    uint8_t index[MAX_CANDIDATES];
-    int64_t score[MAX_CANDIDATES];
-
-} hrCandidatesNorm;
-
-typedef struct {
-    int64_t power[55]; // 68 - 14 + 1 (14 - > 0.67 Hz - 3.3 Hz <- 68)
-    uint16_t frequency[55];
-} motionNorm;
-
-typedef struct {
-    uint8_t state; // 0 - "STABLE" | 1 - "ALERT" | 2 - "UNCERTAIN" | 3 - "RECOVERY"
-    uint8_t alertCounter;
-    uint8_t recovery_counter;
-    uint8_t good_windows;
-    uint8_t last_stable_hr;
-    uint8_t last_hr;
-    uint8_t second_last_hr;
-} FSM;
-
-typedef struct {
-    int32_t temp_red_buffer[BUFFER_SIZE];
-    int64_t power_acIr[4];
-    int64_t power_acRed;
-    int32_t dcIr;
-    int32_t dcRed;
-    int bin;
-    int64_t signal_sum_Ir[4];
-    int64_t signal_sum_Red[4];
-} spo2;
-
-struct VitalResult {
-    int32_t heartRate = 0;
-    int32_t spo2 = 0;
-};
+#include "processor_types.h"
+#include "measurement_types.h"
 
 class SignalProcessingAlgorithms {
 public:
-    SignalProcessingAlgorithms(void);
+    SignalProcessingAlgorithms();
 
-    void process_rfft(int32_t *data, int32_t *re, int32_t *im, int N = 2048); // N = 2048 -> 1024 data + zero padding
+    VitalResult calculateVitals(int32_t bonusQ12, int32_t mainPenaltyQ12, int32_t thCfQ12);
+    int32_t smooth_hr(int32_t hr);
+    void reset_session();
+
+    uint8_t getState() const {
+        return StateMachine.state;
+    }
+
+    spo2 spo2Data{};
+    estimationBuffer processBuffer{};
+
+private:
+    void process_rfft(int32_t *signal, int32_t *re, int32_t *im, int N = FFT_SIZE);
     void process_single_bin_fft(int32_t *signal, int32_t *temp_buffer, int bin, int N);
-    int64_t get_max_motion_penalty_bin(int bin);
+
     void calculate_hr_candidates(int32_t *re, int32_t *im);
-    void calculate_motion_frequencies(int32_t *re_1, int32_t *im_1,
-                                    int32_t *re_2, int32_t *im_2,
-                                    int32_t *re_3, int32_t *im_3); // one re/im pair per accelerometer axis
+    void calculate_motion_frequencies(int32_t *re_1, int32_t *im_1, int32_t *re_2, int32_t *im_2, int32_t *re_3, int32_t *im_3);
 
     int calculate_hr(int32_t bonus_weight, int32_t main_penalty_weight, int32_t th_cf);
     int calculate_spo2();
-    VitalResult calculateVitals(int32_t bonusQ12, int32_t mainPenaltyQ12, int32_t thCfQ12);
-    int32_t smooth_hr(int32_t hr);
 
-    void reset_session();
-
-    hrCandidatesNorm HrTopCandidates = {0};
-    motionNorm motionHrBand = {0};
-
-    FSM StateMachine = {0};
-
-    spo2 spo2Data = {0};
-
-    estimationBuffer processBuffer= {0};
-
-    fftWorkspace sharedFftBuffer = {0};
-
-private:
-    int32_t display_hr = 0;
+    int64_t get_max_motion_penalty_bin(int bin);
     int32_t normalize_power(int64_t power, int64_t max_power, int64_t min_power);
-};
 
+    hrCandidatesNorm HrTopCandidates{};
+    motionNorm motionHrBand{};
+    FSM StateMachine{};
+    fftWorkspace sharedFftBuffer{};
+
+    int32_t display_hr = 0;
+};
 
 #endif

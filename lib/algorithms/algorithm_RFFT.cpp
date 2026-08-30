@@ -2,6 +2,7 @@
 
 rfftAlgorithm::rfftAlgorithm() {}
 
+// get the Q31 twiddle factor using the sine lookup table
 void rfftAlgorithm::calculate_angles(int32_t *wr, int32_t *wi, int angle_idx) {
     if (angle_idx <= 512) {
         *wr = sin_table_q31[512 - angle_idx];
@@ -18,13 +19,13 @@ void rfftAlgorithm::swap(int32_t *tab1, int32_t *tab2) {
     *tab1 = temp;
 }
 
-// even samples 0, 2, 4 ... + zero padding move to re, 
-// odd samples 1, 3, 5 ... + zero padding move to im
-
+// even input samples are stored in re and odd samples in im before this function is called
+// with the remaining positions filled with zeros for zero padding
 void rfftAlgorithm::rfft(int32_t *re, int32_t *im, int N) { // N = 2048 -> 1024 data + zero padding
     
     int M = N / 2;
     
+    // reorder the packed complex samples into bit-reversed order
     int j = 0;
     for (int i = 0; i < M - 1; i++) {
         if (i < j) {
@@ -38,7 +39,8 @@ void rfftAlgorithm::rfft(int32_t *re, int32_t *im, int N) { // N = 2048 -> 1024 
         }
         j += k;
     }
-    
+
+    // rrocess the FFT in stages, doubling the block size at each step
     for (int stage_size = 2; stage_size <= M; stage_size *= 2) {
         
         int half_step = stage_size / 2;
@@ -52,6 +54,7 @@ void rfftAlgorithm::rfft(int32_t *re, int32_t *im, int N) { // N = 2048 -> 1024 
                 int top_idx = i;
                 int bottom_idx = i + half_step;
                 
+                // apply twiddle factor to the bottom butterfly input
                 int64_t temp_r1 = (int64_t)re[bottom_idx] * wr;
                 int64_t temp_r2 = (int64_t)re[bottom_idx] * wi;
                 int64_t temp_i1 = (int64_t)im[bottom_idx] * wi;
@@ -60,6 +63,7 @@ void rfftAlgorithm::rfft(int32_t *re, int32_t *im, int N) { // N = 2048 -> 1024 
                 int32_t tr = (int32_t)((temp_r1 - temp_i1 + (1LL << 30)) >> 31);
                 int32_t ti = (int32_t)((temp_r2 + temp_i2 + (1LL << 30)) >> 31);
                 
+                // scale each FFT stage by 1/2 to reduce the risk of overflow
                 int32_t temp_re_bottom = (re[top_idx] - tr + 1) >> 1;
                 int32_t temp_im_bottom = (im[top_idx] - ti + 1) >> 1;
                 int32_t temp_re_top = (re[top_idx] + tr + 1) >> 1;
@@ -74,12 +78,14 @@ void rfftAlgorithm::rfft(int32_t *re, int32_t *im, int N) { // N = 2048 -> 1024 
         }
     }
     
+    // recover the DC and Nyquist components from the packed complex FFT
     int32_t dc_value = re[0] + im[0];
     int32_t nyquist_value = re[0] - im[0];
     
     re[0] = dc_value;
     im[0] = 0;
     
+    // reconstruct the positive-frequency spectrum of the original real signal
     for (int k = 1; k <= M / 2; k++) {
         int mirror_k = M - k;
         
@@ -92,6 +98,7 @@ void rfftAlgorithm::rfft(int32_t *re, int32_t *im, int N) { // N = 2048 -> 1024 
         int32_t wr, wi;
         calculate_angles(&wr, &wi, k * (2048 / N)); 
         
+        // apply the real-FFT reconstruction twiddle factor in Q31
         int64_t temp_r1 = (int64_t)Or * wr;
         int64_t temp_r2 = (int64_t)Or * wi;
         int64_t temp_i1 = (int64_t)Oi * wi;
@@ -116,6 +123,8 @@ void rfftAlgorithm::rfft(int32_t *re, int32_t *im, int N) { // N = 2048 -> 1024 
     im[M] = 0;
 }
 
+// calculate the power of one frequency bin directly
+// this is used when a full FFT is not needed
 int64_t rfftAlgorithm::calculate_single_bin_power(int32_t *data, int bin, int N) {
     int M = N / 2;
     int64_t sum_re = 0;
@@ -134,9 +143,12 @@ int64_t rfftAlgorithm::calculate_single_bin_power(int32_t *data, int bin, int N)
             wi = -wi;
         }
 
+        // accumulate the real and imaginary components using Q31 twiddle factors
         sum_re += ((int64_t)data[n] * wr + (1LL << 30)) >> 31;
         sum_im += ((int64_t)data[n] * wi + (1LL << 30)) >> 31;
     }
+
+    // scale the accumulated components before calculating their squared magnitude
     sum_re >>= 11;
     sum_im >>= 11;
 
