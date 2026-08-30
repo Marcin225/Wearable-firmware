@@ -104,38 +104,8 @@ void MAX30102::clearISRFlag() {
     readRegister(MAX30102_INTERRUPT_STATUS_1);
 }
 
-
-
-int MAX30102::getWritePointer() {
-    return readRegister(MAX30102_FIFO_WRITE_POINTER);
-}
-
-int MAX30102::getReadPointer() {
-    return readRegister(MAX30102_FIFO_READ_POINTER);
-}
-
-int MAX30102::getOverflowCounter() {
-    return readRegister(MAX30102_FIFO_OVERFLOW_COUNTER);
-}
-
-int MAX30102::getISRStatus1() {
-    return readRegister(MAX30102_INTERRUPT_STATUS_1);
-}
-
-void MAX30102::debugConfig() {
-    Serial.print("INT_EN1: 0x");
-    Serial.println(readRegister(MAX30102_INTERRUPT_ENABLE_1), HEX);
-
-    Serial.print("FIFO_CFG: 0x");
-    Serial.println(readRegister(MAX30102_FIFO_CONFIGURATION), HEX);
-}
-
-
-
-
-
 void MAX30102::shutDown() {
-    writeRegister(MAX30102_MODE_CONFIGURATION, 0x80);
+    writeRegister(MAX30102_MODE_CONFIGURATION, 0x80); // enter shutdown mode by setting the SHDN bit
 }
 
 void MAX30102::wakeUp() {

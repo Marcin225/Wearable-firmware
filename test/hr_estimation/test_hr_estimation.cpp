@@ -1,10 +1,11 @@
 /**
-* C++ test wrapper for full HR algorithm pipeline validation
- * processes the dataset using a sliding window of 1024 samples (shifted by 256) 
- * to compute continuous heart rate estimates
- * 
- * exports the estimated HR, smoothed HR and reference HR from EKG belt to a CSV file for benchmarking 
- * 
+ * C++ test wrapper for full HR algorithm pipeline validation.
+ * Processes the dataset using a sliding window of 1024 samples shifted by 256
+ * to generate continuous heart-rate estimates.
+ *
+ * Exports the estimated HR, smoothed HR and reference HR from the EKG belt
+ * to a CSV file for benchmarking.
+ *
  * Args:
  *     input.csv  : Path to the input CSV containing raw sensor data
  *     output.csv : Path to the output CSV for the computed heart rates
@@ -17,17 +18,11 @@
 #include <string>
 #include <cstdint>
 #include <cstring>
-#include "pre_processor.h"
+
+#include "config.h"
+#include "signal_channel.h"
 #include "post_processor.h"
 
-#define BUFFER_SIZE 1024
-#define CHUNK_SIZE 256
-#define FFT_SIZE 2048
-#define SPECTRUM_SIZE 1025
-
-constexpr int16_t BONUS_Q12 = 61;
-constexpr int16_t PENALTY_Q12 = 3277;
-constexpr int16_t TH_CF_Q12 = 13926;
 
 struct CsvRow {
     int32_t irRaw;
@@ -37,11 +32,6 @@ struct CsvRow {
     int32_t mageneHr;
 };
 
-struct ChannelFilter {
-    biquadFilter lowPass{};
-    biquadFilter highPass{};
-    int32_t medianBuffer[2] = {0};
-};
 
 struct RfftBuffer {
     int32_t sampleBuffer[BUFFER_SIZE];
@@ -49,7 +39,31 @@ struct RfftBuffer {
     int32_t im[SPECTRUM_SIZE];
 };
 
-bool parseCsvRow(const std::string& line, CsvRow& row) {
+
+// access to internal signal-processing stages used only by tests
+struct SignalProcessingTestAccess {
+    static void processRfft(SignalProcessingAlgorithms &algorithm, int32_t *signal, int32_t *re, int32_t *im, int N) {
+        algorithm.process_rfft(signal, re, im, N);
+    }
+
+    static void calculateHrCandidates(SignalProcessingAlgorithms &algorithm, int32_t *re, int32_t *im) {
+        algorithm.calculate_hr_candidates(re, im);
+    }
+
+    static void calculateMotionFrequencies(SignalProcessingAlgorithms &algorithm,
+                                           int32_t *re1, int32_t *im1,
+                                           int32_t *re2, int32_t *im2,
+                                           int32_t *re3, int32_t *im3) {
+        algorithm.calculate_motion_frequencies(re1, im1, re2, im2, re3, im3);
+    }
+
+    static int calculateHr(SignalProcessingAlgorithms &algorithm, int32_t bonusWeight, int32_t penaltyWeight, int32_t thCf) {
+        return algorithm.calculate_hr(bonusWeight, penaltyWeight, thCf);
+    }
+};
+
+
+bool parseCsvRow(const std::string &line, CsvRow &row) {
     std::stringstream stream(line);
     std::string value;
 
@@ -77,37 +91,15 @@ bool parseCsvRow(const std::string& line, CsvRow& row) {
         std::getline(stream, value, ',');
         row.mageneHr = std::stoi(value);
     }
-    catch (const std::exception&) {
+    catch (const std::exception &) {
         return false;
     }
 
     return true;
 }
 
-void initChannel(FilterAlgorithms& filter, ChannelFilter& channel) {
-    filter.initFilter(&channel.lowPass, 11803882, 23607764, 11803882, -1830343161, 806667139);
-    filter.initFilter(&channel.highPass, 1073741824, -2147483648, 1073741824, -2110933440, 1037980441);
-}
 
-int32_t processChannel(FilterAlgorithms& filter, ChannelFilter& channel, int32_t sample, bool firstSample) {
-    if (firstSample) {
-        channel.medianBuffer[0] = sample;
-        channel.medianBuffer[1] = sample;
-    }
-
-    int32_t medianSample = filter.medianFilter(sample, channel.medianBuffer);
-
-    if (firstSample) {
-        filter.initBandPassSteadyState(&channel.lowPass, &channel.highPass, medianSample);
-    }
-
-    int32_t filteredSample = filter.bandPassFilter(&channel.lowPass, medianSample);
-    filteredSample = filter.bandPassFilter(&channel.highPass, filteredSample);
-
-    return filteredSample;
-}
-
-double getReferenceHr(const int32_t* buffer) {
+double getReferenceHr(const int32_t *buffer) {
     int64_t sum = 0;
     int count = 0;
 
@@ -125,7 +117,8 @@ double getReferenceHr(const int32_t* buffer) {
     return (double)sum / count;
 }
 
-int main(int argc, char** argv) {
+
+int main(int argc, char **argv) {
     if (argc != 3) {
         std::cerr << "Usage: full_pipeline_test <input.csv> <output.csv>\n";
         return EXIT_FAILURE;
@@ -203,18 +196,21 @@ int main(int argc, char** argv) {
             continue;
         }
 
-        algorithm.process_rfft(bufferIR.sampleBuffer, bufferIR.re, bufferIR.im, FFT_SIZE);
-        algorithm.calculate_hr_candidates(bufferIR.re, bufferIR.im);
+        SignalProcessingTestAccess::processRfft(algorithm, bufferIR.sampleBuffer, bufferIR.re, bufferIR.im, FFT_SIZE);
+        SignalProcessingTestAccess::calculateHrCandidates(algorithm, bufferIR.re, bufferIR.im);
 
-        algorithm.process_rfft(bufferAccX.sampleBuffer, bufferAccX.re, bufferAccX.im, FFT_SIZE);
-        algorithm.process_rfft(bufferAccY.sampleBuffer, bufferAccY.re, bufferAccY.im, FFT_SIZE);
-        algorithm.process_rfft(bufferAccZ.sampleBuffer, bufferAccZ.re, bufferAccZ.im, FFT_SIZE);
+        SignalProcessingTestAccess::processRfft(algorithm, bufferAccX.sampleBuffer, bufferAccX.re, bufferAccX.im, FFT_SIZE);
+        SignalProcessingTestAccess::processRfft(algorithm, bufferAccY.sampleBuffer, bufferAccY.re, bufferAccY.im, FFT_SIZE);
+        SignalProcessingTestAccess::processRfft(algorithm, bufferAccZ.sampleBuffer, bufferAccZ.re, bufferAccZ.im, FFT_SIZE);
 
-        algorithm.calculate_motion_frequencies(bufferAccX.re, bufferAccX.im,
-                                        bufferAccY.re, bufferAccY.im,
-                                        bufferAccZ.re, bufferAccZ.im);
+        SignalProcessingTestAccess::calculateMotionFrequencies(
+            algorithm,
+            bufferAccX.re, bufferAccX.im,
+            bufferAccY.re, bufferAccY.im,
+            bufferAccZ.re, bufferAccZ.im
+        );
 
-        int32_t heartRate = algorithm.calculate_hr(BONUS_Q12, PENALTY_Q12, TH_CF_Q12);
+        int32_t heartRate = SignalProcessingTestAccess::calculateHr(algorithm, BONUS_Q12, MAIN_PENALTY_Q12, TH_CF_Q12);
         int32_t hrSmooth = algorithm.smooth_hr(heartRate);
 
         double mageneHr = getReferenceHr(refBuffer);

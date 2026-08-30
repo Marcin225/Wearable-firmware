@@ -1,9 +1,17 @@
 #include "tasks.h"
+
+#include "config.h"
+#include "SystemContext.h"
+#include "collector_task/collector_context.h"
+#include "signal_channel.h"
 #include "sensor_processing.h"
 #include "measurement_buffer.h"
+#include "spo2_dc.h"
 
 TaskHandle_t CollectAndFilterTaskHandle = NULL;
 
+// generate an active-low interrupt when the MAX30102 FIFO reaches the configured sample threshold (28/32)
+// the ISR wakes the vCollectAndFilterDataTask to collect and process the available samples
 void IRAM_ATTR max30102ISR() {
     BaseType_t higherPriorityTaskWoken = pdFALSE;
     vTaskNotifyGiveFromISR(CollectAndFilterTaskHandle, &higherPriorityTaskWoken);
@@ -14,22 +22,10 @@ void IRAM_ATTR max30102ISR() {
     
 }
 
-void resetMeasurementSession(SystemContext &sysCtx, int &buffer_idx, int &spo2_idx, bool &first_sample) {
-    buffer_idx = 0;
-    spo2_idx = 0;
-    first_sample = true;
-    // buffer_ready = false;
-    // fill_stage = BufferWarmupStage::EMPTY;
-    for (int s = 0; s < 4; s++) {
-        sysCtx.algorithm.spo2Data.signal_sum_Ir[s] = 0;
-        sysCtx.algorithm.spo2Data.signal_sum_Red[s] = 0;
-    }
-
-    sysCtx.measurementSessionId.fetch_add(1, std::memory_order_relaxed);
-}
-
-// collects ppg and accel data, applies basic filtering and builds synchronized stream
-
+// collect and synchronize MAX30102 and MPU6050 data
+// use the MAX30102 as the timing reference and interpolate MPU6050 samples
+// apply initial median and Butterworth band-pass filtering
+// manage device states: SLEEP, CHECK and WORK
 void vCollectAndFilterDataTask(void *pvParameters) {
     SystemContext *sysCtx = (SystemContext *)pvParameters;
 
@@ -39,34 +35,18 @@ void vCollectAndFilterDataTask(void *pvParameters) {
     int maxCount = 0;
     int mpuCount = 0;
 
+    // receive an empty buffer, fill it with processed samples and send it to the calculation task
+    // two buffer queues are used to continuously exchange empty and full buffers
     if (xQueueReceive(sysCtx->emptyQueue, &currentBuffer, portMAX_DELAY) != pdTRUE || currentBuffer == NULL) {
         Serial.println("Failed to get initial empty buffer");
         vTaskDelete(NULL);
         return;
     }
 
-    int buffer_idx = 0;
-    int spo2_idx = 0;
-    bool first_sample = true;
+    CollectorState state;
+    CollectorFilters filters;
 
-    bool is_finger_removed = false;
-    TickType_t finger_removed_time = 0;
-    int no_motion_counter = 0;
-    int pulsation_no_signal_counter = 0;
-    int pulsation_signal_counter = 0;
-    int PULSATION_DELAY = 3000;
-
-    ChannelFilter ir;
-    ChannelFilter red;
-    ChannelFilter accX;
-    ChannelFilter accY;
-    ChannelFilter accZ;
-
-    initChannel(sysCtx->filter, ir);
-    initChannel(sysCtx->filter, red);
-    initChannel(sysCtx->filter, accX);
-    initChannel(sysCtx->filter, accY);
-    initChannel(sysCtx->filter, accZ);
+    initCollectorFilters(sysCtx->filter, filters);
 
     for (;;) {
         ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
@@ -81,24 +61,25 @@ void vCollectAndFilterDataTask(void *pvParameters) {
             mpuBatch[mpuCount++] = sysCtx->mpuSensor.readSample();
         }
 
-        switch (system_mode) {
-                case DeviceState::WORK:
+        // collect synchronized PPG and motion data, apply filtering and update SpO2 DC components
+        // enter deep sleep when no finger signal is detected for the configured timeout
+        switch (sysCtx->systemMode) {
+                case DeviceState::WORK: {
 
                     for (int s = 0; s < maxCount; s++) {
                         MaxSample rawMaxData = sysCtx->maxSensor.readSample();
 
                         if (rawMaxData.Ir < FINGER_IR_THRESHOLD) {
-                            if (!is_finger_removed) {
-                                finger_removed_time = xTaskGetTickCount();
-                                is_finger_removed = true;
+                            if (!state.is_finger_removed) {
+                                state.finger_removed_time = xTaskGetTickCount();
+                                state.is_finger_removed = true;
 
-                                // RESET system
-                                resetMeasurementSession(*sysCtx, buffer_idx, spo2_idx, first_sample);
+                                // RESET
+                                resetMeasurementSession(*sysCtx, state);
                             }
 
-                            if (xTaskGetTickCount() - finger_removed_time >= pdMS_TO_TICKS(15000)) {
-                                // deep sleep esp and max30102 and set mpu6050 to check motion mode
-                                is_finger_removed = false;
+                            if (xTaskGetTickCount() - state.finger_removed_time >= pdMS_TO_TICKS(15000)) {
+                                state.is_finger_removed = false;
 
                                 sysCtx->maxSensor.shutDown();
                                 sysCtx->mpuSensor.enableWakeOnMotion();
@@ -108,53 +89,24 @@ void vCollectAndFilterDataTask(void *pvParameters) {
                             continue;
                         }
 
-                        is_finger_removed = false;
+                        state.is_finger_removed = false;
 
                         MpuSample rawMpuData = interpolateMpu(mpuBatch, mpuCount, s, maxCount);
                         
-                        currentBuffer->sample_buffer_Ir[buffer_idx] = processChannel(sysCtx->filter, ir, rawMaxData.Ir, first_sample);
-                        currentBuffer->sample_buffer_Red[buffer_idx] = processChannel(sysCtx->filter, red, rawMaxData.Red, first_sample);
+                        currentBuffer->sample_buffer_Ir[state.buffer_idx] = processChannel(sysCtx->filter, filters.ir, rawMaxData.Ir, state.first_sample);
+                        currentBuffer->sample_buffer_Red[state.buffer_idx] = processChannel(sysCtx->filter, filters.red, rawMaxData.Red, state.first_sample);
 
-                        currentBuffer->sample_buffer_AccX[buffer_idx] = processChannel(sysCtx->filter, accX, (int32_t)rawMpuData.accX, first_sample);
-                        currentBuffer->sample_buffer_AccY[buffer_idx] = processChannel(sysCtx->filter, accY, (int32_t)rawMpuData.accY, first_sample);
-                        currentBuffer->sample_buffer_AccZ[buffer_idx] = processChannel(sysCtx->filter, accZ, (int32_t)rawMpuData.accZ, first_sample);
+                        currentBuffer->sample_buffer_AccX[state.buffer_idx] = processChannel(sysCtx->filter, filters.accX, (int32_t)rawMpuData.accX, state.first_sample);
+                        currentBuffer->sample_buffer_AccY[state.buffer_idx] = processChannel(sysCtx->filter, filters.accY, (int32_t)rawMpuData.accY, state.first_sample);
+                        currentBuffer->sample_buffer_AccZ[state.buffer_idx] = processChannel(sysCtx->filter, filters.accZ, (int32_t)rawMpuData.accZ, state.first_sample);
 
-                        if (spo2_idx >= BUFFER_SIZE - CHUNK_SIZE) {
-                            sysCtx->algorithm.spo2Data.signal_sum_Ir[3] += rawMaxData.Ir;
-                            sysCtx->algorithm.spo2Data.signal_sum_Red[3] += rawMaxData.Red;
-                            if (spo2_idx >= BUFFER_SIZE - 1) {
+                        updateSpo2Dc(sysCtx->algorithm.spo2Data, state.spo2_idx, rawMaxData.Ir, rawMaxData.Red);
 
-                                int64_t sumIr = 0;
-                                int64_t sumRed = 0;
-                                for (int s = 0; s < 4; s++) {
-                                    sumIr += sysCtx->algorithm.spo2Data.signal_sum_Ir[s];
-                                    sumRed += sysCtx->algorithm.spo2Data.signal_sum_Red[s];
-                                }
+                        state.buffer_idx++;
+                        state.spo2_idx++;
+                        state.first_sample = false;
 
-                                sysCtx->algorithm.spo2Data.dcIr = sumIr / BUFFER_SIZE;
-                                sysCtx->algorithm.spo2Data.dcRed = sumRed / BUFFER_SIZE;
-
-                                shiftDcSignalSum(sysCtx->algorithm.spo2Data.signal_sum_Ir);
-                                shiftDcSignalSum(sysCtx->algorithm.spo2Data.signal_sum_Red);
-
-                                spo2_idx = BUFFER_SIZE - CHUNK_SIZE - 1;
-                            }
-                        }else if (spo2_idx >= 2 * CHUNK_SIZE && spo2_idx < BUFFER_SIZE - CHUNK_SIZE) {
-                            sysCtx->algorithm.spo2Data.signal_sum_Ir[2] += rawMaxData.Ir;
-                            sysCtx->algorithm.spo2Data.signal_sum_Red[2] += rawMaxData.Red;
-                        }else if (spo2_idx >= CHUNK_SIZE && spo2_idx <  2 * CHUNK_SIZE) {
-                            sysCtx->algorithm.spo2Data.signal_sum_Ir[1] += rawMaxData.Ir;
-                            sysCtx->algorithm.spo2Data.signal_sum_Red[1] += rawMaxData.Red;
-                        }else if (spo2_idx >= 0 && spo2_idx < CHUNK_SIZE) {
-                            sysCtx->algorithm.spo2Data.signal_sum_Ir[0] += rawMaxData.Ir;
-                            sysCtx->algorithm.spo2Data.signal_sum_Red[0] += rawMaxData.Red;
-                        }
-
-                        buffer_idx++;
-                        spo2_idx++;
-                        first_sample = false;
-
-                        if (buffer_idx < CHUNK_SIZE) {
+                        if (state.buffer_idx < CHUNK_SIZE) {
                             continue;
                         }
 
@@ -163,21 +115,23 @@ void vCollectAndFilterDataTask(void *pvParameters) {
                         if (xQueueSend(sysCtx->fullQueue, &currentBuffer, portMAX_DELAY) != pdTRUE) {
                             Serial.println("Queue is full -> dropping packet");
                         }
-
                         if (xQueueReceive(sysCtx->emptyQueue, &currentBuffer, portMAX_DELAY) != pdTRUE || currentBuffer == NULL) {
                             Serial.println("Failed to receive next empty buffer");
                             vTaskDelete(NULL);
                             return;
                         }
 
-                        buffer_idx = 0;
+                        state.buffer_idx = 0;
                         
                     }
 
                     break;
 
+                }
 
-                case DeviceState::CHECK:
+                // periodically check for a valid PPG signal and motion activity
+                // return to WORK when a signal is detected or return to SLEEP when no motion is detected
+                case DeviceState::CHECK: {
                     
                     bool finger_found_in_batch = false;
 
@@ -189,60 +143,61 @@ void vCollectAndFilterDataTask(void *pvParameters) {
                     }
 
                     if (finger_found_in_batch) {
-                        pulsation_signal_counter++;
+                        state.pulsation_signal_counter++;
                         
-                        if (pulsation_signal_counter >= 2) {
-                            system_mode = DeviceState::WORK;
+                        if (state.pulsation_signal_counter >= 2) {
+                            sysCtx->systemMode = DeviceState::WORK;
 
-                            pulsation_no_signal_counter = 0;
-                            pulsation_signal_counter = 0;
-                            no_motion_counter = 0;
-                            is_finger_removed = false;
-                            PULSATION_DELAY = 3000;
+                            state.pulsation_no_signal_counter = 0;
+                            state.pulsation_signal_counter = 0;
+                            state.no_motion_counter = 0;
+                            state.is_finger_removed = false;
+                            state.PULSATION_DELAY = 3000;
 
-                            // RESET system
-                            resetMeasurementSession(*sysCtx, buffer_idx, spo2_idx, first_sample);
+                            // RESET
+                            resetMeasurementSession(*sysCtx, state);
                         }
 
                     }else {
-                        pulsation_signal_counter = 0;
+                        state.pulsation_signal_counter = 0;
 
                         if (mpuCount <= 0) {
-                            no_motion_counter = 0;
+                            state.no_motion_counter = 0;
                         } else {
                             int32_t motion = calculateMotion(mpuBatch, mpuCount);
 
                             if (motion < MOTION_THRESHOLD) {
-                                no_motion_counter++;
+                                state.no_motion_counter++;
 
-                                if (no_motion_counter >= 3) {
+                                if (state.no_motion_counter >= 3) {
 
-                                    PULSATION_DELAY = 3000;
+                                    state.PULSATION_DELAY = 3000;
                                     sysCtx->maxSensor.shutDown();
                                     sysCtx->mpuSensor.enableWakeOnMotion();
                                     esp_deep_sleep_start();
                                 }
                             } else {
-                                pulsation_no_signal_counter++;
+                                state.pulsation_no_signal_counter++;
 
-                                if (pulsation_no_signal_counter >= 5) {
-                                    PULSATION_DELAY = 5000;
+                                if (state.pulsation_no_signal_counter >= 5) {
+                                    state.PULSATION_DELAY = 5000;
                                 }
 
-                                no_motion_counter = 0;
+                                state.no_motion_counter = 0;
                             }
                         }
 
                         sysCtx->maxSensor.shutDown();
                         sysCtx->mpuSensor.sleep();
 
-                        vTaskDelay(pdMS_TO_TICKS(PULSATION_DELAY));
+                        vTaskDelay(pdMS_TO_TICKS(state.PULSATION_DELAY));
 
                         sysCtx->maxSensor.wakeUp();
                         sysCtx->mpuSensor.wakeUp();
                     }
 
                     break;
+                }
         }
 
             // Stack Size
@@ -253,8 +208,10 @@ void vCollectAndFilterDataTask(void *pvParameters) {
     }
 }
 
-// processes buffered PPG data and estimates vital signs (HR, SpO2)
 
+// process filled data chunks from the collector task
+// combine four 256-sample chunks into a 1024-sample processing buffer
+// calculate heart rate and SpO2 from the accumulated samples
 void vCalculateVitalsTask(void *pvParameters) {
     SystemContext *sysCtx = (SystemContext *)pvParameters;
     pulseData *processingBuffer = NULL;
@@ -272,6 +229,7 @@ void vCalculateVitalsTask(void *pvParameters) {
             continue;
         }
 
+        // discard buffers from outdated measurement sessions to prevent stale data processing
         uint32_t currentSessionId = sysCtx->measurementSessionId.load(std::memory_order_relaxed);
 
         if (processingBuffer->sessionId != currentSessionId) {
@@ -330,10 +288,12 @@ void vCalculateVitalsTask(void *pvParameters) {
             Serial.print(" ");
             Serial.print(spo2);
             Serial.print(" ");
-            Serial.print(sysCtx->algorithm.StateMachine.state);
+            Serial.print(sysCtx->algorithm.getState());
             Serial.print("\n");
             Serial.print("\n");
 
+            // the collector task may invalidate the session while vitals are being calculated
+            // finish the current calculation, then reset the processing state if the session changed
             currentSessionId = sysCtx->measurementSessionId.load(std::memory_order_relaxed);
 
             if (activeSessionId != currentSessionId) {

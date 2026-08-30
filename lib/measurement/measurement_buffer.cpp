@@ -1,6 +1,9 @@
 #include "measurement_buffer.h"
+
+#include <cstring>
 #include "../../include/config.h"
 
+// copy a data chunk into the processing buffer at the specified offset
 void copyChunkToProcessingBuffer(estimationBuffer &destination, const pulseData &source, size_t offset) {
     memcpy(destination.sample_buffer_Ir + offset, 
         source.sample_buffer_Ir, CHUNK_SIZE * sizeof(int32_t));
@@ -15,6 +18,7 @@ void copyChunkToProcessingBuffer(estimationBuffer &destination, const pulseData 
         source.sample_buffer_AccZ, CHUNK_SIZE * sizeof(int32_t));
 }
 
+// shift the existing data to make room for the newest chunk
 void shiftProcessingBuffer(estimationBuffer &buffer, size_t data_size) {
     memmove(buffer.sample_buffer_Ir,
         buffer.sample_buffer_Ir + CHUNK_SIZE, data_size * sizeof(int32_t));

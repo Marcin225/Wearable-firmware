@@ -4,8 +4,8 @@
 
 // NOTE:
 // This "MPU6050" module returns WHO_AM_I = 0x98 and appears to be
-// an ICM-20689 or ICM-20689-compatible clone.
-// Wake-on-Motion is therefore configured using ICM-20689 registers.
+// an ICM-20689 or ICM-20689-compatible clone
+// Wake-on-Motion is therefore configured using ICM-20689 registers
 
 MPU6050::MPU6050(void) {
     _i2caddr = MPU6050_I2C_ADDRESS;
@@ -94,7 +94,7 @@ void MPU6050::setup() {
 
     writeRegister(MPU6050_USER_CTRL, 0x40); // enable FIFO
 
-    writeRegister(MPU6050_FIFO_EN, 0x08); // enable FIFO for accelerometer data only.
+    writeRegister(MPU6050_FIFO_EN, 0x08); // enable FIFO for accelerometer data only
 
     mpuData.head = 0;
     mpuData.tail = 0;
@@ -103,8 +103,8 @@ void MPU6050::setup() {
 void MPU6050::enableWakeOnMotion() {
     // NOTE:
     // This "MPU6050" module returns WHO_AM_I = 0x98 and appears to be
-    // an ICM-20689 or ICM-20689-compatible clone.
-    // Wake-on-Motion is therefore configured using ICM-20689 registers.
+    // an ICM-20689 or ICM-20689-compatible clone
+    // Wake-on-Motion is therefore configured using ICM-20689 registers
 
     writeRegister(ICM20689_ACCEL_CONFIG2, 0x01); // 0x01 -> enable accel DLPF, A_DLPF_CFG = 1 (218.1 Hz bandwidth), recommended for WOM
 
@@ -114,7 +114,7 @@ void MPU6050::enableWakeOnMotion() {
     writeRegister(ICM20689_WOM_Z_THR, 0x4B); //  WOM threshold Z
 
     // 0x80 -> INT_LEVEL 1 – The logic level for INT/DRDY pin is active low
-    // 0x20 -> LATCH_INT_EN - INT/DRDY pin level held until interrupt status is cleared.
+    // 0x20 -> LATCH_INT_EN - INT/DRDY pin level held until interrupt status is cleared
     writeRegister(MPU6050_INT_PIN_CFG, 0xA0);
 
     // 0x80 -> ACCEL_INTEL_EN - This bit enables the Wake-on-Motion detection logic
@@ -136,6 +136,7 @@ void MPU6050::enableWakeOnMotion() {
 
 }
 
+// clear interrupt flag
 void MPU6050::getISRStatus() {
     readRegister(ICM20689_INT_STATUS);
 }

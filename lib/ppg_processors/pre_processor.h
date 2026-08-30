@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 
-// Butterworth band-pass biquad section with Q2.30 coefficients.
+// Butterworth band-pass biquad section with Q2.30 coefficients
 typedef struct {
     int32_t b0, b1, b2, a1, a2;
 
