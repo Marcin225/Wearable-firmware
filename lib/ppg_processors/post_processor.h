@@ -10,6 +10,8 @@
 #include "processor_types.h"
 #include "measurement_types.h"
 
+struct SignalProcessingTestAccess;
+
 class SignalProcessingAlgorithms {
 public:
     SignalProcessingAlgorithms();
@@ -26,6 +28,8 @@ public:
     estimationBuffer processBuffer{};
 
 private:
+    friend struct SignalProcessingTestAccess;
+
     void process_rfft(int32_t *signal, int32_t *re, int32_t *im, int N = FFT_SIZE);
     void process_single_bin_fft(int32_t *signal, int32_t *temp_buffer, int bin, int N);
 

@@ -1,26 +1,24 @@
 /**
- * parameter sweep script for tuning the crest factor threshold (th_cf)
- * iterates through a predefined range of th_cf values, running the complete
- * hr estimation pipeline (filtering, fft, peak detection, motion cancellation)
- * for each value
+ * Parameter sweep script for tuning the crest factor threshold (TH_CF).
+ * Runs the complete HR estimation pipeline for a range of TH_CF values
+ * and compares the results with the Magene reference HR.
  *
- * generates a comprehensive metrics report to determine the optimal balance
- * between accuracy and coverage. measured metrics include:
- * - ref windows
- * - valid windows
- * - valid ratio
- * - mae
- * - rmse
- * - bias
- * - max error
- * - within 5 bpm
- * - within 10% or 5 bpm
- * - effective 5 bpm
- * - effective 10% or 5 bpm
+ * Generated metrics:
+ *  - reference windows
+ *  - valid windows
+ *  - valid ratio
+ *  - MAE
+ *  - RMSE
+ *  - bias
+ *  - max error
+ *  - within 5 BPM
+ *  - within 10% or 5 BPM
+ *  - effective 5 BPM
+ *  - effective 10% or 5 BPM
  *
- * args:
- *     input.csv  : path to the raw wearable csv data (including ground truth)
- *     output.csv : path to the output csv containing metrics for each th_cf
+ * Args:
+ *     input.csv  : Path to the raw wearable CSV data
+ *     output.csv : Path to the output CSV containing metrics for each TH_CF
  */
 
 #include <cstdlib>
@@ -34,29 +32,20 @@
 #include <iomanip>
 #include <cstring>
 #include <cstdint>
-#include "pre_processor.h"
+
+#include "config.h"
+#include "signal_channel.h"
 #include "post_processor.h"
 
-#define BUFFER_SIZE 1024
-#define CHUNK_SIZE 256
-#define FFT_SIZE 2048
-#define SPECTRUM_SIZE 1025
 
 struct CsvRow {
-    double timestamp;
     int32_t irRaw;
-    int32_t redRaw;
     int32_t accX;
     int32_t accY;
     int32_t accZ;
     int32_t mageneHr;
 };
 
-struct ChannelFilter {
-    biquadFilter lowPass{};
-    biquadFilter highPass{};
-    int32_t medianBuffer[2] = {0};
-};
 
 struct RfftBuffer {
     int32_t sampleBuffer[BUFFER_SIZE];
@@ -64,10 +53,12 @@ struct RfftBuffer {
     int32_t im[SPECTRUM_SIZE];
 };
 
+
 struct HrBuffer {
-    std::vector<int> estimatedHr;
+    std::vector<int32_t> estimatedHr;
     std::vector<double> referenceHr;
 };
+
 
 struct Metrics {
     int refWindows;
@@ -87,19 +78,41 @@ struct Metrics {
     double effective10PctOr5;
 };
 
-bool parseCsvRow(const std::string& line, CsvRow& row) {
+
+// access to internal signal-processing stages used only by tests
+struct SignalProcessingTestAccess {
+    static void processRfft(SignalProcessingAlgorithms &algorithm, int32_t *signal, int32_t *re, int32_t *im, int N) {
+        algorithm.process_rfft(signal, re, im, N);
+    }
+
+    static void calculateHrCandidates(SignalProcessingAlgorithms &algorithm, int32_t *re, int32_t *im) {
+        algorithm.calculate_hr_candidates(re, im);
+    }
+
+    static void calculateMotionFrequencies(SignalProcessingAlgorithms &algorithm, 
+                                    int32_t *re1, int32_t *im1, 
+                                    int32_t *re2, int32_t *im2, 
+                                    int32_t *re3, int32_t *im3) {
+        algorithm.calculate_motion_frequencies(re1, im1, re2, im2, re3, im3);
+    }
+
+    static int calculateHr(SignalProcessingAlgorithms &algorithm, int32_t bonusWeight, int32_t penaltyWeight, int32_t thCf) {
+        return algorithm.calculate_hr(bonusWeight, penaltyWeight, thCf);
+    }
+};
+
+
+bool parseCsvRow(const std::string &line, CsvRow &row) {
     std::stringstream stream(line);
     std::string value;
 
     try {
         std::getline(stream, value, ',');
-        row.timestamp = std::stod(value);
 
         std::getline(stream, value, ',');
         row.irRaw = std::stoi(value);
 
         std::getline(stream, value, ',');
-        row.redRaw = std::stoi(value);
 
         std::getline(stream, value, ',');
         row.accX = std::stoi(value);
@@ -117,14 +130,15 @@ bool parseCsvRow(const std::string& line, CsvRow& row) {
         std::getline(stream, value, ',');
         row.mageneHr = std::stoi(value);
     }
-    catch (const std::exception&) {
+    catch (const std::exception &) {
         return false;
     }
 
     return true;
 }
 
-bool loadCsv(const std::string& csvPath, std::vector<CsvRow>& rows) {
+
+bool loadCsv(const std::string &csvPath, std::vector<CsvRow> &rows) {
     std::ifstream file(csvPath);
 
     if (!file.is_open()) {
@@ -153,30 +167,8 @@ bool loadCsv(const std::string& csvPath, std::vector<CsvRow>& rows) {
     return true;
 }
 
-void initChannel(FilterAlgorithms& filter, ChannelFilter& channel) {
-    filter.initFilter(&channel.lowPass, 11803882, 23607764, 11803882, -1830343161, 806667139);
-    filter.initFilter(&channel.highPass, 1073741824, -2147483648, 1073741824, -2110933440, 1037980441);
-}
 
-int32_t processChannel(FilterAlgorithms& filter, ChannelFilter& channel, int32_t sample, bool firstSample) {
-    if (firstSample) {
-        channel.medianBuffer[0] = sample;
-        channel.medianBuffer[1] = sample;
-    }
-
-    int32_t medianSample = filter.medianFilter(sample, channel.medianBuffer);
-
-    if (firstSample) {
-        filter.initBandPassSteadyState(&channel.lowPass, &channel.highPass, medianSample);
-    }
-
-    int32_t filteredSample = filter.bandPassFilter(&channel.lowPass, medianSample);
-    filteredSample = filter.bandPassFilter(&channel.highPass, filteredSample);
-
-    return filteredSample;
-}
-
-double getReferenceHr(const int *buffer) {
+double getReferenceHr(const int32_t *buffer) {
     int64_t sum = 0;
     int count = 0;
 
@@ -194,7 +186,8 @@ double getReferenceHr(const int *buffer) {
     return (double)sum / count;
 }
 
-Metrics calculateMetrics(const HrBuffer& hrBuff) {
+
+Metrics calculateMetrics(const HrBuffer &hrBuff) {
     Metrics metrics{};
 
     int within5Count = 0;
@@ -263,7 +256,8 @@ Metrics calculateMetrics(const HrBuffer& hrBuff) {
     return metrics;
 }
 
-Metrics runTest(const std::vector<CsvRow>& rows, int16_t thCfQ12) {
+
+Metrics runTest(const std::vector<CsvRow> &rows, int32_t thCfQ12) {
     FilterAlgorithms filter;
     SignalProcessingAlgorithms algorithm;
 
@@ -282,14 +276,14 @@ Metrics runTest(const std::vector<CsvRow>& rows, int16_t thCfQ12) {
     RfftBuffer bufferAccY{};
     RfftBuffer bufferAccZ{};
 
-    int refBuffer[BUFFER_SIZE] = {0};
+    int32_t refBuffer[BUFFER_SIZE] = {0};
 
     HrBuffer hrBuff;
 
     int sampleIdx = 0;
     bool firstSample = true;
 
-    for (const CsvRow& row : rows) {
+    for (const CsvRow &row : rows) {
         bufferIR.sampleBuffer[sampleIdx] = processChannel(filter, ir, row.irRaw, firstSample);
 
         bufferAccX.sampleBuffer[sampleIdx] = processChannel(filter, accX, row.accX, firstSample);
@@ -305,18 +299,26 @@ Metrics runTest(const std::vector<CsvRow>& rows, int16_t thCfQ12) {
             continue;
         }
 
-        algorithm.process_rfft(bufferIR.sampleBuffer, bufferIR.re, bufferIR.im, FFT_SIZE);
-        algorithm.calculate_hr_candidates(bufferIR.re, bufferIR.im);
+        SignalProcessingTestAccess::processRfft(algorithm, bufferIR.sampleBuffer, bufferIR.re, bufferIR.im, FFT_SIZE);
+        SignalProcessingTestAccess::calculateHrCandidates(algorithm, bufferIR.re, bufferIR.im);
 
-        algorithm.process_rfft(bufferAccX.sampleBuffer, bufferAccX.re, bufferAccX.im, FFT_SIZE);
-        algorithm.process_rfft(bufferAccY.sampleBuffer, bufferAccY.re, bufferAccY.im, FFT_SIZE);
-        algorithm.process_rfft(bufferAccZ.sampleBuffer, bufferAccZ.re, bufferAccZ.im, FFT_SIZE);
+        SignalProcessingTestAccess::processRfft(algorithm, bufferAccX.sampleBuffer, bufferAccX.re, bufferAccX.im, FFT_SIZE);
+        SignalProcessingTestAccess::processRfft(algorithm, bufferAccY.sampleBuffer, bufferAccY.re, bufferAccY.im, FFT_SIZE);
+        SignalProcessingTestAccess::processRfft(algorithm, bufferAccZ.sampleBuffer, bufferAccZ.re, bufferAccZ.im, FFT_SIZE);
 
-        algorithm.calculate_motion_frequencies(bufferAccX.re, bufferAccX.im,
-                                            bufferAccY.re, bufferAccY.im,
-                                            bufferAccZ.re, bufferAccZ.im);
+        SignalProcessingTestAccess::calculateMotionFrequencies(
+            algorithm,
+            bufferAccX.re, bufferAccX.im,
+            bufferAccY.re, bufferAccY.im,
+            bufferAccZ.re, bufferAccZ.im
+        );
 
-        int32_t heartRate = algorithm.calculate_hr(61, 3277, thCfQ12);
+        int32_t heartRate = SignalProcessingTestAccess::calculateHr(
+            algorithm,
+            BONUS_Q12,
+            MAIN_PENALTY_Q12,
+            thCfQ12
+        );
 
         double referenceHr = getReferenceHr(refBuffer);
 
@@ -329,7 +331,7 @@ Metrics runTest(const std::vector<CsvRow>& rows, int16_t thCfQ12) {
         memmove(bufferAccY.sampleBuffer, bufferAccY.sampleBuffer + CHUNK_SIZE, (BUFFER_SIZE - CHUNK_SIZE) * sizeof(int32_t));
         memmove(bufferAccZ.sampleBuffer, bufferAccZ.sampleBuffer + CHUNK_SIZE, (BUFFER_SIZE - CHUNK_SIZE) * sizeof(int32_t));
 
-        memmove(refBuffer, refBuffer + CHUNK_SIZE, (BUFFER_SIZE - CHUNK_SIZE) * sizeof(int));
+        memmove(refBuffer, refBuffer + CHUNK_SIZE, (BUFFER_SIZE - CHUNK_SIZE) * sizeof(int32_t));
 
         sampleIdx = BUFFER_SIZE - CHUNK_SIZE;
     }
@@ -337,7 +339,8 @@ Metrics runTest(const std::vector<CsvRow>& rows, int16_t thCfQ12) {
     return calculateMetrics(hrBuff);
 }
 
-int main(int argc, char** argv) {
+
+int main(int argc, char **argv) {
     if (argc != 3) {
         std::cerr << "Usage: tune_th_cf <input.csv> <output.csv>\n";
         return EXIT_FAILURE;
@@ -370,7 +373,9 @@ int main(int argc, char** argv) {
 
     for (int th10 = 30; th10 <= 79; th10++) {
         double thCf = th10 / 10.0;
-        int16_t thCfQ12 = (int16_t)((th10 * 4096 + 5) / 10);
+
+        // convert the threshold to Q12
+        int32_t thCfQ12 = (th10 * 4096 + 5) / 10;
 
         Metrics metrics = runTest(rows, thCfQ12);
 

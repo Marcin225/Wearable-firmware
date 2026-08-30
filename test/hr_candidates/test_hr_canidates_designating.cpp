@@ -1,8 +1,8 @@
 /**
- * C++ test wrapper for HR candidate extraction validation
- * generates a CSV of the top spectral peaks to verify the fixed-point 
- * peak detection and sorting algorithm against the Python reference model
- * 
+ * C++ test wrapper for HR candidate extraction validation.
+ * Generates a CSV with the strongest spectral HR candidates to verify
+ * the fixed-point peak detection and sorting against the Python reference.
+ *
  * Args:
  *     input.csv  : Path to the input CSV containing raw sensor data
  *     output.csv : Path to the output CSV for the extracted HR candidates
@@ -14,12 +14,12 @@
 #include <sstream>
 #include <string>
 #include <cstdint>
+
+#include "config.h"
 #include "pre_processor.h"
+#include "signal_channel.h"
 #include "post_processor.h"
 
-#define BUFFER_SIZE 1024
-#define FFT_SIZE 2048
-#define SPECTRUM_SIZE 1025
 
 struct CsvRow {
     double timestamp;
@@ -30,11 +30,6 @@ struct CsvRow {
     int32_t accZ;
 };
 
-struct ChannelFilter {
-    biquadFilter lowPass{};
-    biquadFilter highPass{};
-    int32_t medianBuffer[2] = {0};
-};
 
 struct RfftBuffer {
     int32_t sampleBuffer[BUFFER_SIZE];
@@ -42,7 +37,24 @@ struct RfftBuffer {
     int32_t im[SPECTRUM_SIZE];
 };
 
-bool parseCsvRow(const std::string& line, CsvRow& row) {
+
+// access to internal signal-processing stages used only by tests
+struct SignalProcessingTestAccess {
+    static void processRfft(SignalProcessingAlgorithms &algorithm, int32_t *signal, int32_t *re, int32_t *im, int N) {
+        algorithm.process_rfft(signal, re, im, N);
+    }
+
+    static void calculateHrCandidates(SignalProcessingAlgorithms &algorithm, int32_t *re, int32_t *im) {
+        algorithm.calculate_hr_candidates(re, im);
+    }
+
+    static const hrCandidatesNorm &getHrCandidates(const SignalProcessingAlgorithms &algorithm) {
+        return algorithm.HrTopCandidates;
+    }
+};
+
+
+bool parseCsvRow(const std::string &line, CsvRow &row) {
     std::stringstream stream(line);
     std::string value;
 
@@ -52,37 +64,15 @@ bool parseCsvRow(const std::string& line, CsvRow& row) {
         std::getline(stream, value, ',');
         row.irRaw = std::stoi(value);
     }
-    catch (const std::exception&) {
+    catch (const std::exception &) {
         return false;
     }
 
     return true;
 }
 
-void initChannel(FilterAlgorithms& filter, ChannelFilter& channel) {
-    filter.initFilter(&channel.lowPass, 11803882, 23607764, 11803882, -1830343161, 806667139);
-    filter.initFilter(&channel.highPass, 1073741824, -2147483648, 1073741824, -2110933440, 1037980441);
-}
 
-int32_t processChannel(FilterAlgorithms& filter, ChannelFilter& channel, int32_t sample, bool firstSample) {
-    if (firstSample) {
-        channel.medianBuffer[0] = sample;
-        channel.medianBuffer[1] = sample;
-    }
-
-    int32_t medianSample = filter.medianFilter(sample, channel.medianBuffer);
-
-    if (firstSample) {
-        filter.initBandPassSteadyState(&channel.lowPass, &channel.highPass, medianSample);
-    }
-
-    int32_t filteredSample = filter.bandPassFilter(&channel.lowPass, medianSample);
-    filteredSample = filter.bandPassFilter(&channel.highPass, filteredSample);
-
-    return filteredSample;
-}
-
-int main(int argc, char** argv) {
+int main(int argc, char **argv) {
     if (argc != 3) {
         std::cerr << "Usage: hr_candidates_test <input.csv> <output.csv>\n";
         return EXIT_FAILURE;
@@ -141,16 +131,18 @@ int main(int argc, char** argv) {
         return EXIT_FAILURE;
     }
 
-    algorithm.process_rfft(bufferIR.sampleBuffer, bufferIR.re, bufferIR.im, FFT_SIZE);
-    algorithm.calculate_hr_candidates(bufferIR.re, bufferIR.im);
+    SignalProcessingTestAccess::processRfft(algorithm, bufferIR.sampleBuffer, bufferIR.re, bufferIR.im, FFT_SIZE);
+    SignalProcessingTestAccess::calculateHrCandidates(algorithm, bufferIR.re, bufferIR.im);
+
+    const hrCandidatesNorm &candidates = SignalProcessingTestAccess::getHrCandidates(algorithm);
 
     outFile << "candidate;index;power;frequency_q14\n";
 
     for (int i = 0; i < MAX_CANDIDATES; i++) {
         outFile << i << ';'
-                << (int)algorithm.HrTopCandidates.index[i] << ';'
-                << algorithm.HrTopCandidates.power[i] << ';'
-                << algorithm.HrTopCandidates.frequency[i] << '\n';
+                << (int)candidates.index[i] << ';'
+                << candidates.power[i] << ';'
+                << candidates.frequency[i] << '\n';
     }
 
     return EXIT_SUCCESS;
