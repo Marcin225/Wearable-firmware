@@ -202,7 +202,7 @@ void vCollectAndFilterDataTask(void *pvParameters) {
 
             // Stack Size
 
-            // Serial.print("Free stack (High Water Mark): ");
+            // Serial.print("Free stack (High Water Mark): collector ");
             // Serial.println(uxTaskGetStackHighWaterMark(NULL));
 
     }
@@ -292,15 +292,15 @@ void vCalculateVitalsTask(void *pvParameters) {
             Serial.print("\n");
             Serial.print("\n");
 
-            // the collector task may invalidate the session while vitals are being calculated
-            // finish the current calculation, then reset the processing state if the session changed
-            currentSessionId = sysCtx->measurementSessionId.load(std::memory_order_relaxed);
+            // // the collector task may invalidate the session while vitals are being calculated
+            // // finish the current calculation, then reset the processing state if the session changed
+            // currentSessionId = sysCtx->measurementSessionId.load(std::memory_order_relaxed);
 
-            if (activeSessionId != currentSessionId) {
-                activeSessionId = currentSessionId;
-                fill_stage = BufferWarmupStage::EMPTY;
-                sysCtx->algorithm.reset_session();
-            }
+            // if (activeSessionId != currentSessionId) {
+            //     activeSessionId = currentSessionId;
+            //     fill_stage = BufferWarmupStage::EMPTY;
+            //     sysCtx->algorithm.reset_session();
+            // }
             
         }
 
@@ -314,7 +314,7 @@ void vCalculateVitalsTask(void *pvParameters) {
 
         // Stack Size
 
-        // Serial.print("Free stack (High Water Mark): ");
+        // Serial.print("Free stack (High Water Mark): calculation");
         // Serial.println(uxTaskGetStackHighWaterMark(NULL));
     }
 }

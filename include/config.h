@@ -13,10 +13,10 @@
 
 #define SAMPLING_RATE_HZ            100 // PPG sampling rate in Hz
 #define FINGER_IR_THRESHOLD         50000 // minimum IR level used to detect finger contact
-#define MOTION_THRESHOLD            2500 // accelerometer motion detection threshold
+#define MOTION_THRESHOLD            40000 // accelerometer motion detection threshold
 
-#define TASK_DATA_STACK_SIZE        2048 // collector task stack size in bytes
-#define TASK_CALC_STACK_SIZE        4096 // calculation task stack size in bytes
+#define TASK_DATA_STACK_SIZE        4096 // collector task stack size in bytes
+#define TASK_CALC_STACK_SIZE        8192 // calculation task stack size in bytes
 #define TASK_DATA_PRIORITY          2 // collector task priority
 #define TASK_CALC_PRIORITY          1 // calculation task priority
 
