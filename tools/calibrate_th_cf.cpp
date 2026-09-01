@@ -319,6 +319,7 @@ Metrics runTest(const std::vector<CsvRow> &rows, int32_t thCfQ12) {
             MAIN_PENALTY_Q12,
             thCfQ12
         );
+        heartRate = algorithm.smooth_hr(heartRate);
 
         double referenceHr = getReferenceHr(refBuffer);
 
