@@ -82,6 +82,7 @@ void vCollectAndFilterDataTask(void *pvParameters) {
                                 state.is_finger_removed = false;
 
                                 sysCtx->maxSensor.shutDown();
+                                sysCtx->batterySensor.sleep();
                                 sysCtx->mpuSensor.enableWakeOnMotion();
                                 esp_deep_sleep_start();
                             }
@@ -173,6 +174,7 @@ void vCollectAndFilterDataTask(void *pvParameters) {
 
                                     state.PULSATION_DELAY = 3000;
                                     sysCtx->maxSensor.shutDown();
+                                    sysCtx->batterySensor.sleep();
                                     sysCtx->mpuSensor.enableWakeOnMotion();
                                     esp_deep_sleep_start();
                                 }
@@ -202,7 +204,7 @@ void vCollectAndFilterDataTask(void *pvParameters) {
 
             // Stack Size
 
-            // Serial.print("Free stack (High Water Mark): ");
+            // Serial.print("Free stack (High Water Mark): collector ");
             // Serial.println(uxTaskGetStackHighWaterMark(NULL));
 
     }
@@ -292,15 +294,15 @@ void vCalculateVitalsTask(void *pvParameters) {
             Serial.print("\n");
             Serial.print("\n");
 
-            // the collector task may invalidate the session while vitals are being calculated
-            // finish the current calculation, then reset the processing state if the session changed
-            currentSessionId = sysCtx->measurementSessionId.load(std::memory_order_relaxed);
+            // // the collector task may invalidate the session while vitals are being calculated
+            // // finish the current calculation, then reset the processing state if the session changed
+            // currentSessionId = sysCtx->measurementSessionId.load(std::memory_order_relaxed);
 
-            if (activeSessionId != currentSessionId) {
-                activeSessionId = currentSessionId;
-                fill_stage = BufferWarmupStage::EMPTY;
-                sysCtx->algorithm.reset_session();
-            }
+            // if (activeSessionId != currentSessionId) {
+            //     activeSessionId = currentSessionId;
+            //     fill_stage = BufferWarmupStage::EMPTY;
+            //     sysCtx->algorithm.reset_session();
+            // }
             
         }
 
@@ -309,12 +311,18 @@ void vCalculateVitalsTask(void *pvParameters) {
         }
 
         // if (sysCtx->BLE.getConnectionState()) {
-        //     sysCtx->BLE.sendPackage((uint8_t)currentHR, (uint8_t)currentSpO2, 99);
+        //     int batteryPercent = sysCtx->batterySensor.readBatteryPercent();
+        //     if (batteryPercent == -1) {
+        //         Serial.println("Error reading battery percentage");
+        //         batteryPercent = 0;
+        //     }
+
+        //     sysCtx->BLE.sendPackage((uint8_t)hrSmooth, (uint8_t)spo2, (uint8_t)batteryPercent);
         // }
 
         // Stack Size
 
-        // Serial.print("Free stack (High Water Mark): ");
+        // Serial.print("Free stack (High Water Mark): calculation");
         // Serial.println(uxTaskGetStackHighWaterMark(NULL));
     }
 }

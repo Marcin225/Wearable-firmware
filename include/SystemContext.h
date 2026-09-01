@@ -11,6 +11,7 @@
 
 #include "max30102_driver.h"
 #include "mpu6050_driver.h"
+#include "max17048_driver.h"
 
 #include "pre_processor.h"
 #include "post_processor.h"
@@ -27,6 +28,7 @@ enum class DeviceState {
 struct SystemContext {
     MAX30102 maxSensor;
     MPU6050 mpuSensor;
+    MAX17048 batterySensor;
 
     FilterAlgorithms filter;
     SignalProcessingAlgorithms algorithm;

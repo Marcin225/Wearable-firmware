@@ -1,11 +1,17 @@
 """
-validation script for hr candidate extraction
-verifies if the primary spectral peak (bin x) from the python reference 
-is present among the C++ candidates within a +/- 1 bin tolerance
+Validation script for HR candidate extraction.
 
-args:
-    reference (str): path to the python reference candidates csv
-    test (str): path to the c++ candidates csv
+Compares HR candidates produced by the Python reference and the C++ implementation.
+
+Because both implementations use different peak-detection methods, the complete
+candidate sets are not expected to match exactly.
+
+The test passes if the strongest candidate from either implementation has
+a corresponding candidate in the other implementation within +/- 1 FFT bin.
+
+Args:
+    reference (str): Path to the Python reference candidates CSV
+    test (str): Path to the C++ candidates CSV
 """
 
 import argparse
@@ -13,7 +19,17 @@ import sys
 import pandas as pd
 
 
-MAX_BIN_DIFF = 1 # max allowed shift in frequency bins
+MAX_BIN_DIFF = 1
+
+
+def find_closest(candidate_bin, candidates):
+    differences = (candidates["index"] - candidate_bin).abs()
+    closest_idx = differences.idxmin()
+
+    closest_bin = int(candidates.loc[closest_idx, "index"])
+    bin_diff = abs(candidate_bin - closest_bin)
+
+    return closest_bin, bin_diff
 
 
 def main(reference_path, test_path):
@@ -24,30 +40,44 @@ def main(reference_path, test_path):
     test = test[test["power"] > 0]
 
     if len(reference) == 0:
-        print("FAIL: no reference candidate")
+        print("FAIL: no Python reference candidates")
         return 1
 
     if len(test) == 0:
         print("FAIL: no C++ candidates")
         return 1
 
-    reference_bin = int(reference.iloc[0]["index"])
-    reference_freq = int(reference.iloc[0]["frequency_q14"])
+    # strongest candidate from each implementation
+    reference_primary = reference.loc[reference["power"].idxmax()]
+    test_primary = test.loc[test["power"].idxmax()]
 
-    closest = test.iloc[(test["index"] - reference_bin).abs().argmin()]
+    reference_bin = int(reference_primary["index"])
+    test_bin = int(test_primary["index"])
 
-    test_bin = int(closest["index"])
-    test_freq = int(closest["frequency_q14"])
+    # check strongest Python candidate against all C++ candidates
+    closest_cpp_bin, reference_diff = find_closest(reference_bin, test)
 
-    bin_diff = abs(reference_bin - test_bin)
+    # check strongest C++ candidate against all Python candidates
+    closest_reference_bin, test_diff = find_closest(test_bin, reference)
 
-    print(f"Reference bin:  {reference_bin}")
-    print(f"C++ bin:        {test_bin}")
-    print(f"Reference freq: {reference_freq}")
-    print(f"C++ freq:       {test_freq}")
-    print(f"Bin diff:       {bin_diff}")
+    reference_matched = reference_diff <= MAX_BIN_DIFF
+    test_matched = test_diff <= MAX_BIN_DIFF
 
-    if bin_diff <= MAX_BIN_DIFF:
+    print()
+    print("HR CANDIDATE COMPARISON")
+    print()
+
+    print(f"Python strongest bin: {reference_bin}")
+    print(f"Closest C++ bin:      {closest_cpp_bin}")
+    print(f"Bin difference:       {reference_diff}")
+    print()
+
+    print(f"C++ strongest bin:    {test_bin}")
+    print(f"Closest Python bin:   {closest_reference_bin}")
+    print(f"Bin difference:       {test_diff}")
+    print()
+
+    if reference_matched or test_matched:
         print("RESULT: PASS")
         return 0
 

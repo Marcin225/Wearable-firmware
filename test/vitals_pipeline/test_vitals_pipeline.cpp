@@ -2,8 +2,8 @@
  * C++ test wrapper for full SpO2 and HR algorithm pipeline validation.
  * Processes the dataset using a sliding window of 1024 samples shifted by 256.
  *
- * Exports HR, SpO2, reference HR from the Magene belt and intermediate
- * AC/DC values to a CSV file for analysis.
+ * Exports raw HR, smoothed HR, SpO2, reference HR from the Magene belt
+ * and intermediate AC/DC values to a CSV file for analysis.
  *
  * Args:
  *     input.csv  : Path to the input CSV containing raw sensor data
@@ -155,7 +155,7 @@ int main(int argc, char **argv) {
     int windowIdx = 0;
     bool firstSample = true;
 
-    outFile << "window;hr;magene_hr;spo2;dc_ir;dc_red;ac_ir_power;ac_red_power;bin\n";
+    outFile << "window;hr;hr_smooth;magene_hr;spo2;dc_ir;dc_red;ac_ir_power;ac_red_power;bin\n";
 
     while (std::getline(file, line)) {
         if (line.empty()) {
@@ -201,10 +201,12 @@ int main(int argc, char **argv) {
 
         VitalResult result = algorithm.calculateVitals(BONUS_Q12, MAIN_PENALTY_Q12, TH_CF_Q12);
 
+        int32_t hrSmooth = algorithm.smooth_hr(result.heartRate);
         double mageneHr = getReferenceHr(refBuffer);
 
         outFile << windowIdx << ';'
                 << result.heartRate << ';'
+                << hrSmooth << ';'
                 << mageneHr << ';'
                 << result.spo2 << ';'
                 << algorithm.spo2Data.dcIr << ';'

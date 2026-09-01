@@ -85,6 +85,7 @@ void MPU6050::setup() {
     writeRegister(MPU6050_SMPLRT_DIV, 0x09); // 0x09 - Sample Rate (100 hz) = Gyroscope Output Rate / (1 + SMPLRT_DIV)
 
     writeRegister(ICM20689_ACCEL_CONFIG2, 0x03); // accelerometer DLPF bandwidth = 44.8 Hz, internal output rate = 1 kHz
+    // writeRegister(MPU6050_CONFIG, 0x03);
 
     writeRegister(MPU6050_ACCEL_CONFIG, 0x00); // 0x00 - full scale range 2g
 
@@ -142,12 +143,24 @@ void MPU6050::getISRStatus() {
 }
 
 void MPU6050::sleep() {
-    writeRegister(MPU6050_PWR_MGMT_1, 0x40); // 0x40 sleep ON
+    writeRegister(MPU6050_PWR_MGMT_1, 0x00); // stop accel samples to FIFO
+    writeRegister(MPU6050_USER_CTRL, 0x04); // reset hardware FIFO
+    mpuData.head = 0;
+    mpuData.tail = 0;
+
+    writeRegister(MPU6050_PWR_MGMT_1, 0x48); // SLEEP + TEMP_DIS
 }
 
 void MPU6050::wakeUp() {
     writeRegister(MPU6050_PWR_MGMT_1, 0x08); // Wakes up the MPU6050 and disable temperature sensor (0x08) 
             //and sets the clock source to the 8 MHz oscillator (0x00) (gyroscope is in standby mode)
+
+    writeRegister(MPU6050_USER_CTRL, 0x04); // reset FIFO
+    writeRegister(MPU6050_USER_CTRL, 0x40); // enable FIFO
+    writeRegister(MPU6050_FIFO_EN, 0x08); // enable FIFO for accelerometer data only
+
+    mpuData.head = 0;
+    mpuData.tail = 0;
 }
 
 uint16_t MPU6050::getFifoCount() {
@@ -165,7 +178,7 @@ uint16_t MPU6050::getFifoCount() {
     return count;
 }
 
-// reads 6 bytes of accel and gyro data and push it into ring buffer
+// read three-axis accelerometer samples from the hardware FIFO into the local ring buffer
 void MPU6050::readNewData() {
     uint16_t fifoCount = getFifoCount();
     uint16_t samples = fifoCount / 6; // 3-axis accel | 1 axis = 2 bytes

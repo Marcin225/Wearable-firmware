@@ -83,7 +83,7 @@ void MAX30102::setup() {
 
     clearISRFlag(); // clear old ISR flag
 
-    writeRegister(MAX30102_MODE_CONFIGURATION, 0x03); // Wake up sensor and start multi-LED mode (Red + IR)
+    writeRegister(MAX30102_MODE_CONFIGURATION, 0x03); // Wake up sensor and start Red + IR LED mode 
 
 }
 

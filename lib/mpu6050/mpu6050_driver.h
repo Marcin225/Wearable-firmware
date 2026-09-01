@@ -47,7 +47,6 @@
 #define ICM20689_WOM_Z_THR          0x22
 #define ICM20689_INT_STATUS         0x3A
 #define ICM20689_ACCEL_INTEL_CTRL   0x69
-#define ICM20689_ACCEL_INTEL_CTRL   0x69
 
 
 struct MpuSample {
