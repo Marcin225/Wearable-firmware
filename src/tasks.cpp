@@ -82,6 +82,7 @@ void vCollectAndFilterDataTask(void *pvParameters) {
                                 state.is_finger_removed = false;
 
                                 sysCtx->maxSensor.shutDown();
+                                sysCtx->batterySensor.sleep();
                                 sysCtx->mpuSensor.enableWakeOnMotion();
                                 esp_deep_sleep_start();
                             }
@@ -173,6 +174,7 @@ void vCollectAndFilterDataTask(void *pvParameters) {
 
                                     state.PULSATION_DELAY = 3000;
                                     sysCtx->maxSensor.shutDown();
+                                    sysCtx->batterySensor.sleep();
                                     sysCtx->mpuSensor.enableWakeOnMotion();
                                     esp_deep_sleep_start();
                                 }
@@ -309,7 +311,13 @@ void vCalculateVitalsTask(void *pvParameters) {
         }
 
         // if (sysCtx->BLE.getConnectionState()) {
-        //     sysCtx->BLE.sendPackage((uint8_t)currentHR, (uint8_t)currentSpO2, 99);
+        //     int batteryPercent = sysCtx->batterySensor.readBatteryPercent();
+        //     if (batteryPercent == -1) {
+        //         Serial.println("Error reading battery percentage");
+        //         batteryPercent = 0;
+        //     }
+
+        //     sysCtx->BLE.sendPackage((uint8_t)hrSmooth, (uint8_t)spo2, (uint8_t)batteryPercent);
         // }
 
         // Stack Size

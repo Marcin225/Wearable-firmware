@@ -45,17 +45,8 @@ class MAX30102 {
         void wakeUp();
         void FifoConfiguration();
         void clearISRFlag();
-
-        int getWritePointer();
-        int getReadPointer();
-        int getOverflowCounter();
-        int getISRStatus1();
-        void debugConfig();
-
-
         uint16_t available();
         MaxSample readSample();
-
     
     private:
         uint8_t _i2caddr;

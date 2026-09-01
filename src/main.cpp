@@ -21,6 +21,12 @@ void setup() {
     sysContext.systemMode = DeviceState::CHECK;
   }
 
+  // if (!sysContext.batterySensor.begin()) {
+  //   Serial.println("Max17048 Not Found / Init Error");
+  // }else {
+  //   Serial.println("Max17048 Ok");
+  // }
+
   if (!sysContext.maxSensor.begin()) {
     Serial.println("Max30102 Not Found / Init Error");
   } else {
