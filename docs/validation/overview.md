@@ -25,7 +25,7 @@ The analysis includes:
 - HR tracking over time,
 - aggregate agreement with the ECG reference.
 
-The detailed results are available in [heart-rate.md](heart-rate.md).
+The detailed results are available in [heart_rate.md](heart_rate.md).
 
 ## SpO2 Validation
 
