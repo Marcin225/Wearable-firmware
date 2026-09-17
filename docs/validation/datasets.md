@@ -4,6 +4,8 @@ The validation dataset contains recordings collected under different motion cond
 
 During all recordings, the optical sensor was worn on the finger. A chest-worn ECG strap was used simultaneously as a reference for heart-rate measurements and ground-truth comparison.
 
+All recordings were collected from a single participant.
+
 The complete recordings and raw datasets are available here:
 
 [Google Drive – validation recordings](https://drive.google.com/drive/folders/1DDzSgPqNOSl7SWRH2JdoCzcJggn3kJec?usp=sharing)

@@ -3,6 +3,7 @@
 The validation stage evaluates the complete measurement pipeline using recorded sensor data collected under different motion conditions.
 
 7 datasets were recorded, ranging from rest and controlled arm movements to walking, jogging and random whole-body motion.
+All recordings were collected from a single participant.
 
 The validation focuses on two outputs:
 

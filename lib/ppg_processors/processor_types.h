@@ -35,7 +35,7 @@ struct motionNorm {
 
 // state used to stabilize HR estimation between consecutive analysis windows
 struct FSM {
-    uint8_t state;
+    uint8_t state; // 0 - STABLE | 1 - ALERT | 2 - UNCERTAIN | 3 - RECOVERY 
     uint8_t alertCounter;
     uint8_t recovery_counter;
     uint8_t good_windows;

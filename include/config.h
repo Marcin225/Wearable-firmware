@@ -11,6 +11,9 @@
 #define I2C_SDA_PIN                 6
 #define I2C_SCL_PIN                 7
 
+#define MAX30102_INT_PIN            4
+#define MPU_INT_PIN                 3
+
 #define SAMPLING_RATE_HZ            100 // PPG sampling rate in Hz
 #define FINGER_IR_THRESHOLD         50000 // minimum IR level used to detect finger contact
 #define MOTION_THRESHOLD            50000 // accelerometer motion detection threshold

@@ -40,7 +40,7 @@ The sensor FIFO allows samples to be collected in batches instead of requiring t
 
 The prototype uses an **MPU6050-compatible IMU module**.
 
-Although the module is sold as an MPU6050 clone, its register behavior appears to match the **ICM-20689** more closely. The actual device may therefore be an ICM-20689 or another compatible implementation.
+Although the module is sold as an MPU6050 clone, its register behavior appears to match the **MPU6500** more closely. The actual device may therefore be an MPU6500 or another compatible implementation.
 
 Only the accelerometer is used by the firmware. The gyroscope remains disabled to reduce power consumption.
 

@@ -40,7 +40,7 @@ void rfftAlgorithm::rfft(int32_t *re, int32_t *im, int N) { // N = 2048 -> 1024 
         j += k;
     }
 
-    // rrocess the FFT in stages, doubling the block size at each step
+    // process the FFT in stages, doubling the block size at each step
     for (int stage_size = 2; stage_size <= M; stage_size *= 2) {
         
         int half_step = stage_size / 2;

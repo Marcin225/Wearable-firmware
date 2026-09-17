@@ -315,5 +315,12 @@ int SignalProcessingAlgorithms::calculate_hr(int32_t bonus_weight, int32_t main_
 
                 return StateMachine.last_stable_hr;
             }
+
+        default:
+            StateMachine.state = 0;
+            StateMachine.alertCounter = 0;
+            StateMachine.good_windows = 0;
+            StateMachine.recovery_counter = 0;
+            return 0;
     }
 }
