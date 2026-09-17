@@ -7,12 +7,16 @@
 #include "sensor_processing.h"
 #include "measurement_buffer.h"
 #include "spo2_dc.h"
+#include "driver/gpio.h"
 
 TaskHandle_t CollectAndFilterTaskHandle = NULL;
 
 // generate an active-low interrupt when the MAX30102 FIFO reaches the configured sample threshold (28/32)
 // the ISR wakes the vCollectAndFilterDataTask to collect and process the available samples
 void IRAM_ATTR max30102ISR() {
+    // disable GPIO interrupt immediately to prevent repeated ISR execution
+    gpio_intr_disable((gpio_num_t)MAX30102_INT_PIN);
+
     BaseType_t higherPriorityTaskWoken = pdFALSE;
     vTaskNotifyGiveFromISR(CollectAndFilterTaskHandle, &higherPriorityTaskWoken);
 
@@ -52,6 +56,10 @@ void vCollectAndFilterDataTask(void *pvParameters) {
         ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
 
         sysCtx->maxSensor.readNewData();
+
+        // enable GPIO interrupt after the MAX30102 INT line has been cleared
+        gpio_intr_enable((gpio_num_t)MAX30102_INT_PIN);
+        
         sysCtx->mpuSensor.readNewData();
 
         maxCount = sysCtx->maxSensor.available();
@@ -81,8 +89,8 @@ void vCollectAndFilterDataTask(void *pvParameters) {
                             if (xTaskGetTickCount() - state.finger_removed_time >= pdMS_TO_TICKS(15000)) {
                                 state.is_finger_removed = false;
 
+                                // sysCtx->mpuSensor.getISRStatus();
                                 sysCtx->maxSensor.shutDown();
-                                sysCtx->batterySensor.sleep();
                                 sysCtx->mpuSensor.enableWakeOnMotion();
                                 esp_deep_sleep_start();
                             }
@@ -93,6 +101,8 @@ void vCollectAndFilterDataTask(void *pvParameters) {
                         state.is_finger_removed = false;
 
                         MpuSample rawMpuData = interpolateMpu(mpuBatch, mpuCount, s, maxCount);
+
+                        // Serial.println(mpuCount); Serial.print(" "); Serial.print(maxCount); Serial.println("");
                         
                         currentBuffer->sample_buffer_Ir[state.buffer_idx] = processChannel(sysCtx->filter, filters.ir, rawMaxData.Ir, state.first_sample);
                         currentBuffer->sample_buffer_Red[state.buffer_idx] = processChannel(sysCtx->filter, filters.red, rawMaxData.Red, state.first_sample);
@@ -109,6 +119,16 @@ void vCollectAndFilterDataTask(void *pvParameters) {
 
                         if (state.buffer_idx < CHUNK_SIZE) {
                             continue;
+                        }
+
+                        int batteryPercent = 0;
+                        batteryPercent = sysCtx->batterySensor.readBatteryPercent();
+                        if (batteryPercent >= 0) {
+                            batteryPercent = (batteryPercent * 100 + 47) / 94; // 94 % is max observed raw SOC value (MAX17048) -> scale to 100 %
+                            batteryPercent = constrain(batteryPercent, 0, 100);
+                            sysCtx->batteryPercent.store(batteryPercent, std::memory_order_relaxed);
+                        }else {
+                            Serial.println("Error reading battery percentage");
                         }
 
                         currentBuffer->sessionId = sysCtx->measurementSessionId.load(std::memory_order_relaxed);
@@ -173,8 +193,8 @@ void vCollectAndFilterDataTask(void *pvParameters) {
                                 if (state.no_motion_counter >= 3) {
 
                                     state.PULSATION_DELAY = 3000;
+                                    // sysCtx->mpuSensor.getISRStatus();
                                     sysCtx->maxSensor.shutDown();
-                                    sysCtx->batterySensor.sleep();
                                     sysCtx->mpuSensor.enableWakeOnMotion();
                                     esp_deep_sleep_start();
                                 }
@@ -286,39 +306,33 @@ void vCalculateVitalsTask(void *pvParameters) {
             spo2 = result.spo2;
             hrSmooth = sysCtx->algorithm.smooth_hr(heartRate);
             
-            Serial.print(hrSmooth);
-            Serial.print(" ");
-            Serial.print(spo2);
-            Serial.print(" ");
-            Serial.print(sysCtx->algorithm.getState());
-            Serial.print("\n");
-            Serial.print("\n");
-
-            // // the collector task may invalidate the session while vitals are being calculated
-            // // finish the current calculation, then reset the processing state if the session changed
-            // currentSessionId = sysCtx->measurementSessionId.load(std::memory_order_relaxed);
-
-            // if (activeSessionId != currentSessionId) {
-            //     activeSessionId = currentSessionId;
-            //     fill_stage = BufferWarmupStage::EMPTY;
-            //     sysCtx->algorithm.reset_session();
+            // Serial.print(hrSmooth);
+            // Serial.print(" ");
+            // Serial.print(spo2);
+            // Serial.print(" ");
+            // Serial.print(sysCtx->algorithm.getState());
+            // Serial.print("\n");
+            // int batteryPercent = sysCtx->batteryPercent.load(std::memory_order_relaxed);
+            // if (batteryPercent < 0) {
+            //     batteryPercent = 0;
             // }
-            
+            // Serial.print(batteryPercent);
+            // Serial.print("\n");
+            // Serial.print("\n");
+
+            if (sysCtx->BLE.getConnectionState()) {
+                int batteryPercent = sysCtx->batteryPercent.load(std::memory_order_relaxed);
+                if (batteryPercent < 0) {
+                    batteryPercent = 0;
+                }
+
+                sysCtx->BLE.sendPackage((uint8_t)hrSmooth, (uint8_t)spo2, (uint8_t)batteryPercent);
+            }
         }
 
         if (xQueueSend(sysCtx->emptyQueue, &processingBuffer, portMAX_DELAY) != pdTRUE) {
             Serial.println("Failed to return buffer to emptyQueue");
         }
-
-        // if (sysCtx->BLE.getConnectionState()) {
-        //     int batteryPercent = sysCtx->batterySensor.readBatteryPercent();
-        //     if (batteryPercent == -1) {
-        //         Serial.println("Error reading battery percentage");
-        //         batteryPercent = 0;
-        //     }
-
-        //     sysCtx->BLE.sendPackage((uint8_t)hrSmooth, (uint8_t)spo2, (uint8_t)batteryPercent);
-        // }
 
         // Stack Size
 

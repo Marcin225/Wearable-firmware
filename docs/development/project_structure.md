@@ -20,6 +20,7 @@ SmartBandProject/
 ├── test/
 ├── tools/
 ├── platformio.ini
+├── sdkconfig.defaults
 └── README.md
 ```
 
@@ -44,7 +45,7 @@ Contains the main reusable firmware modules.
 - **`max30102/`** – Contains the MAX30102 driver responsible for sensor configuration, FIFO handling, interrupt configuration, shutdown control and IR/RED sample acquisition.
 - **`max17048/`** – Contains the MAX17048 battery fuel-gauge driver used to read the battery state of charge and provide the battery percentage reported by the firmware.
 - **`measurement/`** – Contains measurement-related data structures, reusable measurement buffers and logic used to prepare and organize sensor data before vital-sign calculation.
-- **`mpu6050/`** – Contains the inertial sensor driver responsible for accelerometer configuration, FIFO acquisition and motion-detection functionality. The driver keeps the MPU6050 name although the detected device behaves more like an ICM-20689-compatible sensor.
+- **`mpu6050/`** – Contains the inertial sensor driver responsible for accelerometer configuration, FIFO acquisition and motion-detection functionality. The driver keeps the MPU6050 name although the detected device behaves more like an MPU6500-compatible sensor.
 - **`ppg_processors/`** – Contains the main PPG processing pipeline, including signal preprocessing, HR candidate processing and estimation, SpO2 DC and AC processing, post-processing and result smoothing.
 - **`utils/`** – Contains common integer helper functions and precomputed lookup tables used by the signal-processing modules, including FFT tables and mathematical utilities such as integer square root.
 
@@ -68,3 +69,7 @@ The tools use the production signal-processing implementation with recorded data
 ## `platformio.ini`
 
 Contains the PlatformIO configuration used for firmware compilation and upload.
+
+## `sdkconfig.defaults`
+
+Contains the ESP-IDF configuration overrides used by the firmware, including FreeRTOS timing, power-management support, tickless idle operation, NimBLE support and flash configuration.

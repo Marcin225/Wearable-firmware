@@ -1,167 +1,78 @@
+# SmartBand
 
-# Wearable Vital Signs Monitor  
-  
-A **wearable device prototype** for measuring vital signs and user activity, with planned mobile app integration.  
-  
-The device measures:  
-  
-- heart rate / HR,  
-- blood oxygen saturation / SpO₂,  
-- planned: steps, signal quality, and motion artefacts.  
-  
-The project runs on a **Seeed XIAO ESP32-C3**, uses **FreeRTOS**, **BLE** communication, and custom drivers and signal-processing algorithms.  
-  
-> The project is currently under development and will be updated regularly.  
-  
----  
-  
-## Demo  
-<p align="center">
-  <video src="https://github.com/user-attachments/assets/80e574f7-a5c9-4611-a4b2-5a76588d8c59"></video>
-</p>
-    
----  
-  
-## Implemented  
-  
-- data reading from **MAX30102** and **MPU6050**,  
-- custom sensor drivers for **MAX30102** and **MPU6050**,  
-- task handling with **FreeRTOS**,  
-- data buffering,  
-- PPG signal filtering,  
-- heart rate calculation using:  
-	- peak detection,  
-	- autocorrelation,  
-- SpO₂ calculation using:  
-	- Ratio of Ratios,  
-- simple **confidence score** based on result fusion,  
-- basic **BLE server** based on NimBLE,  
-- stable HR and SpO₂ readings at rest.  
-  
----  
-  
-## In Progress  
-  
-- motion artefact detection,  
-- motion noise reduction,  
-- NLMS filter testing,  
-- mobile app for data preview,  
-- confidence score improvement,  
-- step counter,  
-- prototype optimization for longer battery life.  
-  
----  
-  
-## Components Used  
-  
-- Seeed XIAO ESP32-C3  
-- MAX30102  
-- MPU6050  
-- PlatformIO  
-- Arduino Framework  
-- FreeRTOS  
-- NimBLE  
-  
----  
-  
-## Circuit Diagram  
-  
-![Circuit diagram](docs/schematic.png)  
-  
----
+SmartBand is a wearable device based on the ESP32-C3 for real-time heart-rate and SpO2 estimation using optical PPG signals.
 
-##  Wiring Table
+The system combines PPG measurements with accelerometer data for motion-aware heart-rate estimation and includes BLE communication, battery monitoring and power-efficient operation.
 
-Both the heart rate sensor (MAX30102) and the IMU (MPU6050) share the same I2C bus and 3.3V power supply from the microcontroller.
+![SmartBand prototype](docs/images/prototype.jpg)
 
-| Function / Signal | XIAO ESP32-C3 | MAX30102 | MPU6050 | Li-Po Battery (3.7V 400mAh) |
-| :--- | :--- | :--- | :--- | :--- |
-| **Power (3.3V)** | `3V3` | `VCC` | `VCC` | - |
-| **Ground (GND)** | `GND` | `GND` | `GND` | - |
-| **I2C SDA** | `D4` | `SDA` | `SDA` | - |
-| **I2C SCL** | `D5` | `SCL` | `SCL` | - |
-| **Battery (+)** | `B+` *(bottom pad)* | - | - | Red wire `+` |
-| **Battery (-)** | `B-` *(bottom pad)* | - | - | Black wire `-` |
+## Features
 
----
+- custom drivers for the MAX30102, MPU6050-compatible IMU and MAX17048 sensors
+- custom heart-rate and SpO2 estimation algorithms implemented using integer and fixed-point arithmetic
+- accelerometer-based motion artifact analysis and motion-aware HR candidate scoring
+- custom fixed-point FFT and signal-processing pipeline running directly on the ESP32-C3
+- FreeRTOS-based separation of sensor acquisition and vital-sign calculation
+- measurement reliability handling using HR signal-quality analysis and a dedicated state machine
+- BLE transmission of heart rate, SpO2 and battery level
+- battery state-of-charge monitoring using the MAX17048
+- power-efficient operation using batched sensor acquisition, automatic light sleep during idle periods, deep sleep during inactivity and accelerometer-based motion wake-up
 
-## Signal Processing Pipeline
+## Mobile Application
 
-The firmware processes PPG data from the MAX30102 sensor using the following pipeline:
+A companion mobile application receives measurement results from the device over Bluetooth Low Energy and displays heart rate, SpO2 and battery level.
 
-```
-Raw RED / IR samples
-        ↓
-Median filtering
-        ↓
-High-pass filtering
-        ↓
-Low-pass filtering
-        ↓
-AC/DC component extraction
-        ↓
-Peak detection + autocorrelation
-        ↓
-Heart rate estimation
-        ↓
-Ratio of Ratios calculation
-        ↓
-SpO₂ lookup table
-        ↓
-Result validation and smoothing
-```
+Unreliable HR or SpO2 measurements are displayed as `--`.
 
----
+![SmartBand mobile application](docs/images/app_dark.png)
 
-## Project structure
+[Mobile application repository](https://github.com/Marcin225/wearable-mobile-app)
 
-```txt
-include/
-├── config.h
-└── SystemContext.h
+## Validation Highlights
 
-lib/
-├── algorithms/
-│   ├── PpgProcessor.cpp
-│   └── algorithm_NLMS.cpp
-├── ble_manager/
-│   └── BLE.cpp
-├── max30102/
-│   └── max30102_driver.cpp
-└── mpu6050/
-    └── mpu6050_driver.cpp
+Heart-rate estimation was validated against an ECG chest strap using seven recordings covering rest, controlled arm movements, walking, jogging and irregular whole-body motion.
 
-src/
-├── main.cpp
-├── tasks.cpp
-└── tasks.h
-```
+The algorithm maintained low HR estimation error across most tested conditions, including continuous movement.
 
----
-## How to Run
+All validation recordings were collected from a single participant.
 
-1.  Clone the repository:
+| Dataset | Valid ratio [%] | MAE [BPM] | RMSE [BPM] | Within ±10% or 5 BPM [%] |
+| :--- | ---: | ---: | ---: | ---: |
+| Rest | 100.00 | 2.12 | 2.94 | 98.25 |
+| Linear arm motion | 100.00 | 2.27 | 3.38 | 96.89 |
+| Rotational motion | 78.12 | 2.03 | 3.30 | 92.00 |
+| Marching in place | 39.38 | 5.43 | 6.82 | 90.48 |
+| Brisk walk | 80.12 | 4.65 | 5.91 | 96.90 |
+| Jogging | 100.00 | 2.60 | 4.55 | 96.27 |
+| Random motion | 91.30 | 3.67 | 4.88 | 93.88 |
 
-```
-https://github.com/Marcin225/Wearable-firmware
-```
+### Jogging
 
-2.  Open the project in **VS Code + PlatformIO**.
-3.  Connect the sensors to the I2C bus.
-4.  Build the project:
+![Heart-rate validation during jogging](docs/validation/figures/jogging_chart.png)
 
-```
-pio run
-```
+### Overall HR Agreement
 
-5.  Upload the firmware:
+![Estimated HR compared with ECG reference](docs/validation/figures/hr_vs_ecg_scatter.png)
 
-```
-pio run --target upload
-```
+[Detailed validation results](docs/validation/overview.md)
 
-6.  Open the serial monitor:
+## Battery Life
 
-```
-pio device monitor
-```
+Battery runtime is measured using the 3.7 V 400 mAh Li-Po battery during normal continuous operation without entering deep sleep.
+
+**Measured runtime:** _to be added after battery-life testing._
+
+## Documentation
+
+Detailed documentation covering the complete hardware and firmware implementation is available in the [`docs/`](docs/) directory.
+
+- [Architecture](docs/architecture/overview.md)
+- [Hardware](docs/hardware/overview.md)
+- [Signal Processing](docs/signal_processing/overview.md)
+- [Testing](docs/testing/overview.md)
+- [Validation](docs/validation/overview.md)
+- [Development](docs/development/project_structure.md)
+
+## License
+
+This project is licensed under the MIT License.

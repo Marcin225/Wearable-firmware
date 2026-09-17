@@ -24,6 +24,8 @@ At a sampling rate of 100 Hz, this results in an update interval of approximatel
 | :--- | ---: | :--- |
 | `I2C_SDA_PIN` | 6 | I2C SDA GPIO |
 | `I2C_SCL_PIN` | 7 | I2C SCL GPIO |
+| `MAX30102_INT_PIN` | 4 | MAX30102 FIFO interrupt GPIO |
+| `MPU_INT_PIN` | 3 | IMU motion interrupt and wake-up GPIO |
 | `FINGER_IR_THRESHOLD` | 50000 | Raw IR threshold used for finger detection |
 
 The MAX30102, inertial sensor and MAX17048 share the same I2C bus.

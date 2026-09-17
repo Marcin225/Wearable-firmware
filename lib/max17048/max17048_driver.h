@@ -7,12 +7,13 @@
 #define MAX17048_I2C_ADDRESS            0x36 // 7 bit
 
 #define MAX17048_SOC                    0x04
+#define MAX17048_VCELL                  0x02
 
 #define MAX17048_CONFIG                 0x0C
+#define MAX17048_MODE                   0x06
 
 #define MAX17048_CMD                    0xFE
 #define MAX17048_RESET_CMD              0x5400
-
 
 
 class MAX17048 {
@@ -23,6 +24,8 @@ class MAX17048 {
         int readBatteryPercent();
         void sleep();
         void wakeUp();
+        void reset();
+        // float readVoltage();
 
     private:
         uint8_t _i2caddr;

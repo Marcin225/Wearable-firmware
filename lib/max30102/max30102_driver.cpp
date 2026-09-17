@@ -114,9 +114,15 @@ void MAX30102::wakeUp() {
 
 // transfer raw Red and IR samples from the hardware FIFO to the local ring buffer
 void MAX30102::readNewData() {
-    uint8_t read_pointer = readRegister(MAX30102_FIFO_READ_POINTER);
-    uint8_t write_pointer = readRegister(MAX30102_FIFO_WRITE_POINTER);
-    uint8_t overflow = readRegister(MAX30102_FIFO_OVERFLOW_COUNTER);
+    clearISRFlag();
+
+    int read_pointer = readRegister(MAX30102_FIFO_READ_POINTER);
+    int write_pointer = readRegister(MAX30102_FIFO_WRITE_POINTER);
+    int overflow = readRegister(MAX30102_FIFO_OVERFLOW_COUNTER);
+
+    if (read_pointer < 0 || write_pointer < 0 || overflow < 0) {
+        return;
+    }
 
     if (read_pointer == write_pointer) {
         if (overflow) {
@@ -124,8 +130,6 @@ void MAX30102::readNewData() {
         }
         return;
     }
-
-    clearISRFlag();
 
     int number_of_samples = 0;
     number_of_samples = write_pointer - read_pointer;

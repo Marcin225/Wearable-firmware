@@ -6,13 +6,14 @@ This separation is necessary because not all test and analysis tools used by the
 
 ## Firmware
 
-The embedded firmware is developed using **PlatformIO** with the Arduino framework for the **Seeed Studio XIAO ESP32-C3**.
+The embedded firmware is developed using **PlatformIO** with the **Arduino and ESP-IDF frameworks** for the **Seeed Studio XIAO ESP32-C3**.
 
 PlatformIO is used for:
 
 - compiling the ESP32-C3 firmware,
 - uploading firmware to the device,
-- serial communication and debugging.
+- serial communication,
+- firmware debugging configuration.
 
 The firmware can be built with:
 
@@ -25,6 +26,8 @@ and uploaded with:
 ```bash
 pio run -t upload
 ```
+
+The project uses sdkconfig.defaults to configure selected ESP-IDF features, including FreeRTOS timing, power management, tickless idle and NimBLE support.
 
 ## Native C++ Tests and Wrappers
 

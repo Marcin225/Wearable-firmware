@@ -45,6 +45,8 @@ struct SystemContext {
     // identifies the current continuous measurement session
     std::atomic<uint32_t> measurementSessionId{0};
 
+    std::atomic<int> batteryPercent{-1};
+
     DeviceState systemMode = DeviceState::WORK;
 };
 

@@ -3,9 +3,10 @@
 #include "mpu6050_driver.h"
 
 // NOTE:
-// This "MPU6050" module returns WHO_AM_I = 0x98 and appears to be
-// an ICM-20689 or ICM-20689-compatible clone
-// Wake-on-Motion is therefore configured using ICM-20689 registers
+// This "MPU6050" module returns WHO_AM_I = 0x72 and appears to be
+// an MPU-6500 or MPU-6500-compatible clone
+// MPU-6500 register definitions are therefore used where required
+// especially for Wake-on-Motion and low-power accelerometer operation
 
 MPU6050::MPU6050(void) {
     _i2caddr = MPU6050_I2C_ADDRESS;
@@ -41,32 +42,16 @@ int MPU6050::readRegister(uint8_t reg) {
 
 // verify hardware identity and initialize sensor settings begin() -> setup()
 bool MPU6050::begin() {
-    
-    //my mpu6050 clone return 0x98 as the WHO_AM_I response, a standard mpu6050 returns 0x68
+    // this MPU-6500-compatible clone returns 0x72
+    // a genuine MPU-6050 normally returns 0x68
+    // a genuine MPU-6500 normally returns 0x70
     if (readRegister(MPU6050_WHO_AM_I) != MPU6050_WHO_AM_I_ANSWER)
         return false;   
 
     writeRegister(MPU6050_PWR_MGMT_1, 0x80); // 0x80 - Reset
 
-    bool resetSucces = false;
-    delay(10);
+    delay(100);
 
-    unsigned long startTime = millis();
-    while (millis() - startTime < 100)
-    {
-        if ((readRegister(MPU6050_PWR_MGMT_1) & 0x80) == 0) {
-            resetSucces = true;
-            break;
-        }
-        
-        delay(5);
-    }
-
-    if (!resetSucces) {
-        return false;
-    }
-
-    delay(10);
     setup();
 
     return true;
@@ -74,17 +59,17 @@ bool MPU6050::begin() {
 
 void MPU6050::setup() {
     writeRegister(MPU6050_PWR_MGMT_1, 0x08); // Wakes up the MPU6050 and disable temperature sensor (0x08) 
-            //and sets the clock source to the 8 MHz oscillator (0x00) (gyroscope is in standby mode)
+            //and sets the clock source to the 20 MHz oscillator (0x00) (gyroscope is in standby mode)
 
     writeRegister(MPU6050_PWR_MGMT_2, 0x07); // disable gyroscope axes
 
     // disable Wake-on-Motion logic
     writeRegister(MPU6050_INT_ENABLE, 0x00);
-    writeRegister(ICM20689_ACCEL_INTEL_CTRL, 0x00);
+    writeRegister(MPU6500_ACCEL_INTEL_CTRL, 0x00);
 
-    writeRegister(MPU6050_SMPLRT_DIV, 0x09); // 0x09 - Sample Rate (100 hz) = Gyroscope Output Rate / (1 + SMPLRT_DIV)
+    writeRegister(MPU6050_SMPLRT_DIV, 0x09); // 0x09 - accelerometer sample rate = 1 kHz / (1 + 9) = 100 Hz
 
-    writeRegister(ICM20689_ACCEL_CONFIG2, 0x03); // accelerometer DLPF bandwidth = 44.8 Hz, internal output rate = 1 kHz
+    writeRegister(MPU6500_ACCEL_CONFIG2, 0x03); // accelerometer DLPF bandwidth = 41 Hz, internal output rate = 1 kHz
     // writeRegister(MPU6050_CONFIG, 0x03);
 
     writeRegister(MPU6050_ACCEL_CONFIG, 0x00); // 0x00 - full scale range 2g
@@ -103,35 +88,36 @@ void MPU6050::setup() {
 
 void MPU6050::enableWakeOnMotion() {
     // NOTE:
-    // This "MPU6050" module returns WHO_AM_I = 0x98 and appears to be
-    // an ICM-20689 or ICM-20689-compatible clone
-    // Wake-on-Motion is therefore configured using ICM-20689 registers
+    // Wake-on-Motion configuration for the MPU-6500-compatible clone
 
-    writeRegister(ICM20689_ACCEL_CONFIG2, 0x01); // 0x01 -> enable accel DLPF, A_DLPF_CFG = 1 (218.1 Hz bandwidth), recommended for WOM
+    // stop FIFO - not needed during Wake-on-Motion
+    writeRegister(MPU6050_FIFO_EN, 0x00);
+    writeRegister(MPU6050_USER_CTRL, 0x00);
 
-    // 0x4B -> 300 mg WOM threshold (1 LSB = 4 mg)
-    writeRegister(ICM20689_WOM_X_THR, 0x4B); // WOM threshold X
-    writeRegister(ICM20689_WOM_Y_THR, 0x4B); // WOM threshold Y
-    writeRegister(ICM20689_WOM_Z_THR, 0x4B); //  WOM threshold Z
+    writeRegister(MPU6500_ACCEL_CONFIG2, 0x01); // 0x01 -> enable accel DLPF, A_DLPF_CFG = 1 (184 Hz bandwidth), recommended for WOM
 
-    // 0x80 -> INT_LEVEL 1 – The logic level for INT/DRDY pin is active low
-    // 0x20 -> LATCH_INT_EN - INT/DRDY pin level held until interrupt status is cleared
+    // 0x26 -> 152 mg WOM threshold (1 LSB = 4 mg)
+    writeRegister(MPU6500_WOM_THR, 0x26); // ONE WOM threshold register shared by X/Y/Z
+
+    // 0x80 -> INT_LEVEL – interrupt pin active low
+    // 0x20 -> LATCH_INT_EN - keep interrupt asserted until status is cleared
     writeRegister(MPU6050_INT_PIN_CFG, 0xA0);
 
     // 0x80 -> ACCEL_INTEL_EN - This bit enables the Wake-on-Motion detection logic
     // 0x40 -> ACCEL_INTEL_MODE - Compare the current sample with the previous sample
-    writeRegister(ICM20689_ACCEL_INTEL_CTRL, 0xC0);
+    writeRegister(MPU6500_ACCEL_INTEL_CTRL, 0xC0);
 
-    readRegister(ICM20689_INT_STATUS); // clear old interrupt
+    readRegister(MPU6050_INT_STATUS); // clear old interrupt
 
-    writeRegister(MPU6050_INT_ENABLE, 0xE0); // 0xE0 -> INT_ENABLE - Enable WoM interrupt on accelerometer
+    writeRegister(MPU6050_INT_ENABLE, 0x40); // 0x40 -> INT_ENABLE - Enable WoM interrupt on accelerometer
 
-    writeRegister(MPU6050_SMPLRT_DIV, 0x13); // 0x09 -> SMPLRT_DIV - Sample Rate (50 hz) = SAMPLE_RATE = INTERNAL_SAMPLE_RATE / (1 + SMPLRT_DIV)
+    // low-power accelerometer sampling rate
+    writeRegister(MPU6500_LP_ACCEL_ODR, 0x07); // 0x07 - Sample Rate (31.25 hz)
 
     // 0x20 -> ACCEL_CYCLE - enable low-power accelerometer cycle mode
     //      when SLEEP = 0 and accel axes are enabled, the chip alternates
     //      between sleep and taking a single accelerometer sample
-    //      at a rate determined by SMPLRT_DIV
+    //      at a rate configured by LP_ACCEL_ODR
     // 0x08 -> TEMP_DIS - disable temperature sensor
     writeRegister(MPU6050_PWR_MGMT_1, 0x28); 
 
@@ -139,7 +125,7 @@ void MPU6050::enableWakeOnMotion() {
 
 // clear interrupt flag
 void MPU6050::getISRStatus() {
-    readRegister(ICM20689_INT_STATUS);
+    readRegister(MPU6050_INT_STATUS);
 }
 
 void MPU6050::sleep() {
@@ -152,8 +138,8 @@ void MPU6050::sleep() {
 }
 
 void MPU6050::wakeUp() {
-    writeRegister(MPU6050_PWR_MGMT_1, 0x08); // Wakes up the MPU6050 and disable temperature sensor (0x08) 
-            //and sets the clock source to the 8 MHz oscillator (0x00) (gyroscope is in standby mode)
+    // wake up sensor, disable temperature sensor and use the internal 20 MHz oscillator as the clock source
+    writeRegister(MPU6050_PWR_MGMT_1, 0x08);
 
     writeRegister(MPU6050_USER_CTRL, 0x04); // reset FIFO
     writeRegister(MPU6050_USER_CTRL, 0x40); // enable FIFO

@@ -39,12 +39,36 @@ bool MAX17048::begin() {
     if (Wire.endTransmission() != 0)
         return false;
 
-    writeRegister(MAX17048_CMD, MAX17048_RESET_CMD); // reset
+    int mode = readRegister(MAX17048_MODE);
+
+    if (mode == -1) {
+        return false;
+    }
+
+    // enable sleep mode (EnSleep)
+    mode |= 0x2000;
+    writeRegister(MAX17048_MODE, mode);
 
     delay(10);
 
     return true;
 }
+
+void MAX17048::reset() {
+    writeRegister(MAX17048_CMD, MAX17048_RESET_CMD); // reset
+    
+    delay(200);
+}
+
+// float MAX17048::readVoltage() {
+//     int raw = readRegister(MAX17048_VCELL);
+
+//     if (raw < 0) {
+//         return -1.0f;
+//     }
+
+//     return raw * 78.125e-6f;
+// }
 
 int MAX17048::readBatteryPercent() {
     int socRaw = readRegister(MAX17048_SOC);
@@ -63,21 +87,23 @@ int MAX17048::readBatteryPercent() {
 void MAX17048::sleep() {
     int config = readRegister(MAX17048_CONFIG);
 
-    if (config != -1) {
-
-        // set bit 7 to start sleep mode
-        config |= 0x0080;
-        writeRegister(MAX17048_CONFIG, config);
+    if (config == -1) {
+        return;
     }
+    
+    // set bit 7 to start sleep mode
+    config |= 0x0080;
+    writeRegister(MAX17048_CONFIG, config);
 }
 
 void MAX17048::wakeUp() {
     int config = readRegister(MAX17048_CONFIG);
 
-    if (config != -1) {
-
-        // clear bit 7 to resume normal operation
-        config &= ~0x0080;
-        writeRegister(MAX17048_CONFIG, config);
+    if (config == -1) {
+        return;
     }
+
+    // clear bit 7 to resume normal operation
+    config &= ~0x0080;
+    writeRegister(MAX17048_CONFIG, config);
 }

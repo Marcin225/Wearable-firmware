@@ -3,29 +3,42 @@
 #include "config.h"
 #include "SystemContext.h"
 #include "tasks.h"
+#include "esp_pm.h"
+#include "esp_sleep.h"
+#include "driver/gpio.h"
+#include "esp_bt.h"
 
 SystemContext sysContext;
 
+// configure dynamic frequency scaling and automatic Light Sleep
+void enableAutomaticLightSleep() {
+    esp_pm_config_esp32c3_t pm_config = {
+        .max_freq_mhz = 160,
+        .min_freq_mhz = 40,
+        .light_sleep_enable = true
+    };
+
+    ESP_ERROR_CHECK(esp_pm_configure(&pm_config));
+
+    Serial.println("Light sleep enabled");
+}
+
+
 void setup() {
-  delay(4000);
   Serial.begin(921600);
+  // delay(5000);
 
-  // Init I2C, sensors and tasks with queues
-
-  Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN);
-  delay(300);
-
+  // check if the ESP32-C3 woke up from Deep Sleep using GPIO
   esp_sleep_wakeup_cause_t wakeup_reason = esp_sleep_get_wakeup_cause();
 
   if (wakeup_reason == ESP_SLEEP_WAKEUP_GPIO) {
     sysContext.systemMode = DeviceState::CHECK;
   }
 
-  // if (!sysContext.batterySensor.begin()) {
-  //   Serial.println("Max17048 Not Found / Init Error");
-  // }else {
-  //   Serial.println("Max17048 Ok");
-  // }
+  // Init I2C, sensors and tasks with queues
+
+  Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN);
+  delay(300);
 
   if (!sysContext.maxSensor.begin()) {
     Serial.println("Max30102 Not Found / Init Error");
@@ -40,13 +53,15 @@ void setup() {
     Serial.println("Mpu6050 Ok");
   }
 
-  delay(20);
+  delay(10);
 
-  // if (!sysContext.BLE.begin()) {
-  //   Serial.println("BLE Init Error");
-  // }else {
-  //   Serial.println("BLE Ok");
-  // }
+  if (!sysContext.batterySensor.begin()) {
+    Serial.println("Max17048 Not Found / Init Error");
+  }else {
+    Serial.println("Max17048 Ok");
+  }
+
+  delay(10);
 
  // queues pass measurement buffers between the collector and calculation tasks
 
@@ -74,14 +89,30 @@ void setup() {
   xTaskCreate(vCollectAndFilterDataTask, "dataCollectorTask", TASK_DATA_STACK_SIZE, &sysContext, TASK_DATA_PRIORITY, &CollectAndFilterTaskHandle);
   xTaskCreate(vCalculateVitalsTask, "vitalsCalculationTask", TASK_CALC_STACK_SIZE, &sysContext, TASK_CALC_PRIORITY, NULL);
 
-  // MAX30102 interrupt wakes the collector task when a new batch of samples is ready
-  pinMode(3, INPUT_PULLUP);
-  attachInterrupt(3, max30102ISR, FALLING);
+  // MAX30102 INT is active-low and wakes the collector task when FIFO data is ready
+  pinMode(MAX30102_INT_PIN, INPUT_PULLUP);
+  attachInterrupt(MAX30102_INT_PIN, max30102ISR, ONLOW_WE);
+
+  // keep MAX30102 interrupt GPIO active during Light Sleep
+  ESP_ERROR_CHECK(gpio_sleep_sel_dis((gpio_num_t)MAX30102_INT_PIN));
+
+  // allow GPIO interrupts to wake the ESP32-C3 from Light Sleep
+  ESP_ERROR_CHECK(esp_sleep_enable_gpio_wakeup());
 
   // MPU motion interrupt wakes the ESP32-C3 from deep sleep
   // the interrupt is active-low
-  pinMode(2, INPUT_PULLUP);
-  esp_deep_sleep_enable_gpio_wakeup((1ULL << 2), ESP_GPIO_WAKEUP_GPIO_LOW);
+  pinMode(MPU_INT_PIN, INPUT_PULLUP);
+  ESP_ERROR_CHECK(esp_deep_sleep_enable_gpio_wakeup((1ULL << MPU_INT_PIN), ESP_GPIO_WAKEUP_GPIO_LOW));
+
+  enableAutomaticLightSleep();
+
+  if (!sysContext.BLE.begin()) {
+    Serial.println("BLE Init Error");
+  }else {
+    Serial.println("BLE Ok");
+
+    ESP_ERROR_CHECK(esp_bt_sleep_enable());
+  }
 }
 
 void loop() {

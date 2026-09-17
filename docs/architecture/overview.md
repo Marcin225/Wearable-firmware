@@ -1,15 +1,18 @@
 # System Architecture Overview
 
-The firmware is developed in **PlatformIO** using the Arduino framework and FreeRTOS on the Seeed Studio XIAO ESP32-C3.
+The firmware is developed in **PlatformIO** using the Arduino and ESP-IDF frameworks with FreeRTOS on the Seeed Studio XIAO ESP32-C3.
+
+The Arduino framework is used for the main application and hardware interfaces, while ESP-IDF APIs are used for lower-level functionality such as power management, sleep configuration and GPIO wake-up.
 
 The ESP32-C3 acts as the main microcontroller and manages sensor acquisition, signal processing, power management, and Bluetooth Low Energy communication.
 
-The system uses two main sensors:
+The system uses three main sensors:
 
 - **MAX30102** – optical PPG sensor used to acquire infrared (IR) and red-light signals for heart-rate and SpO2 estimation.
 - **MPU6050-compatible IMU** – used to measure acceleration for motion artifact reduction and to wake the device from deep sleep when motion is detected.
+- **MAX17048** – battery fuel gauge used to monitor the battery state of charge.
 
-The IMU module used in the prototype is sold as an MPU6050 clone. However, its register behavior appears to match the ICM-20689 more closely, so the actual sensor may be an ICM-20689 or a compatible device.
+The IMU module used in the prototype is sold as an MPU6050 clone. However, its register behavior appears to match the MPU6500 more closely, so the actual sensor may be an MPU6500 or an MPU6500-compatible clone.
 
 The PPG signal is sampled at **100 Hz**. The MAX30102 FIFO is read in batches of approximately **28 samples every 280 ms**, reducing the number of sensor transactions and allowing the processor to remain idle between acquisitions.
 
