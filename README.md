@@ -4,7 +4,9 @@ SmartBand is a wearable device based on the ESP32-C3 for real-time heart-rate an
 
 The system combines PPG measurements with accelerometer data for motion-aware heart-rate estimation and includes BLE communication, battery monitoring and power-efficient operation.
 
-![SmartBand prototype](docs/images/prototype.jpg)
+<p align="center">
+  <img src="docs/images/prototype.png" width="750" alt="SmartBand prototype">
+</p>
 
 ## Features
 
@@ -24,9 +26,13 @@ A companion mobile application receives measurement results from the device over
 
 Unreliable HR or SpO2 measurements are displayed as `--`.
 
-![SmartBand mobile application](docs/images/app_dark.png)
+<p align="center">
+  <img src="docs/images/app_dark.png" width="320" alt="SmartBand mobile application">
+</p>
 
-[Mobile application repository](https://github.com/Marcin225/wearable-mobile-app)
+<p align="center">
+  <a href="https://github.com/Marcin225/wearable-mobile-app">Mobile application repository</a>
+</p>
 
 ## Validation Highlights
 
@@ -48,11 +54,15 @@ All validation recordings were collected from a single participant.
 
 ### Jogging
 
-![Heart-rate validation during jogging](docs/validation/figures/jogging_chart.png)
+<p align="center">
+  <img src="docs/validation/figures/jogging_chart.png" width="700" alt="Heart-rate validation during jogging">
+</p>
 
 ### Overall HR Agreement
 
-![Estimated HR compared with ECG reference](docs/validation/figures/hr_vs_ecg_scatter.png)
+<p align="center">
+  <img src="docs/validation/figures/hr_vs_ecg_scatter.png" width="700" alt="Estimated HR compared with ECG reference">
+</p>
 
 [Detailed validation results](docs/validation/overview.md)
 
@@ -60,7 +70,7 @@ All validation recordings were collected from a single participant.
 
 Battery runtime is measured using the 3.7 V 400 mAh Li-Po battery during normal continuous operation without entering deep sleep.
 
-**Measured runtime:** _to be added after battery-life testing._
+**Measured runtime:** *to be added after battery-life testing.*
 
 ## Documentation
 
